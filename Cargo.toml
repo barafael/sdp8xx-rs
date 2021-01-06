@@ -1,0 +1,21 @@
+[package]
+name = "sdp800"
+version = "0.1.0"
+authors = ["Rafael Bachmann <rafael.bachmann.93@gmail.com>"]
+license = "MIT"
+description = "Platform agnostic Rust driver for the Sensirion SDP800 differential pressure sensor."
+readme = "README.md"
+keywords = ["sdp800", "sensirion", "driver", "embedded-hal-driver"]
+categories = ["embedded", "hardware-support", "no-std"]
+edition = "2018"
+
+[dependencies]
+embedded-hal = "0.2"
+sensirion-i2c = "0.1"
+
+[dev-dependencies]
+linux-embedded-hal = "0.3"
+embedded-hal-mock = "0.7"
+
+[profile.release]
+lto = true
