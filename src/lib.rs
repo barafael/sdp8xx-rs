@@ -76,6 +76,8 @@ pub enum Error<E> {
     I2c(E),
     /// CRC checksum validation failed
     Crc,
+    /// Invalid sensor variant
+    InvalidVariant,
 }
 
 impl<E, I2cWrite, I2cRead> From<i2c::Error<I2cWrite, I2cRead>> for Error<E>
@@ -93,16 +95,9 @@ where
 }
 
 /// I2C commands sent to the sensor.
+/// Missing commands: General call reset, exit sleep mode
 #[derive(Debug, Copy, Clone)]
 enum Command {
-    /// General Call Reset
-    GeneralCallReset,
-    /// Read product identifier 1
-    ReadProductId0,
-    /// Read product identifier 2
-    ReadProductId1,
-    /// Enter sleep mode
-    EnterSleepMode,
     /// Trigger Mass Flow Reading with no clock stretching
     TriggerMassFlowRead,
     /// Trigger Mass Flow Reading with clock stretching
@@ -111,22 +106,39 @@ enum Command {
     TriggerDifferentialPressureRead,
     /// Trigger Differential Pressure Reading with clock stretching
     TriggerDifferentialPressureReadSync,
+    /// Continuous Mass Flow Sampling with Average till read
+    SampleMassFlowAveraging,
+    /// Continuous Mass Flow Sampling with no averaging
+    SampleMassFlowAveragingRaw,
+    /// Continuous Differential Pressure Sampling with Average till read
+    SampleDifferentialPressureAveraging,
+    /// Continuous Differential Pressure Sampling with no averaging
+    SampleDifferentialPressureAveragingRaw,
     /// Stop continuous measurement
     StopContinuousMeasurement,
+    /// Enter sleep mode
+    EnterSleepMode,
+    /// Read product identifier 0
+    ReadProductId0,
+    /// Read product identifier 1
+    ReadProductId1,
 }
 
 impl Command {
     fn as_bytes(self) -> [u8; 2] {
         match self {
-            Command::ReadProductId0 => [0x36, 0x7C],
-            Command::ReadProductId1 => [0xE1, 0x02],
             Command::TriggerMassFlowRead => [0x36, 0x24],
             Command::TriggerMassFlowReadSync => [0x37, 0x26],
             Command::TriggerDifferentialPressureRead => [0x36, 0x2F],
             Command::TriggerDifferentialPressureReadSync => [0x37, 0x2D],
-            Command::GeneralCallReset => [0x00, 0x06],
-            Command::EnterSleepMode => [0x36, 0x77],
+            Command::SampleMassFlowAveraging => [0x36, 0x03],
+            Command::SampleMassFlowAveragingRaw => [0x36, 0x08],
+            Command::SampleDifferentialPressureAveraging => [0x36, 0x15],
+            Command::SampleDifferentialPressureAveragingRaw => [0x36, 0x1E],
             Command::StopContinuousMeasurement => [0x3F, 0xF9],
+            Command::EnterSleepMode => [0x36, 0x77],
+            Command::ReadProductId0 => [0x36, 0x7C],
+            Command::ReadProductId1 => [0xE1, 0x02],
         }
     }
 }
@@ -149,6 +161,7 @@ where
 {
     /// Create a new instance of the SDP800 driver.
     pub fn new(i2c: I2C, address: u8, delay: D) -> Self {
+        // TODO try to communicate and get parameters from chip
         Sdp800 {
             i2c,
             address,
@@ -289,30 +302,72 @@ impl TryFrom<[u8; 9]> for Measurement {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ProductVariant {
     /// SDP800 500 Pascal range with manifold connection, I2C address 0x25
-    Sdp800_500Pa,
+    Sdp800_500Pa {
+        /// The chip revision number
+        revision: u8,
+    },
     /// SDP810 500 Pascal range with tube connection, I2C address 0x25
-    Sdp810_500Pa,
+    Sdp810_500Pa {
+        /// The chip revision number
+        revision: u8,
+    },
     /// SDP801 500 Pascal range with manifold connection, I2C address 0x26
-    Sdp801_500Pa,
+    Sdp801_500Pa {
+        /// The chip revision number
+        revision: u8,
+    },
     /// SDP811 500 Pascal range with tube connection, I2C address 0x26
-    Sdp811_500Pa,
+    Sdp811_500Pa {
+        /// The chip revision number
+        revision: u8,
+    },
     /// SDP800 125 Pascal range with manifold connection, I2C address 0x25
-    Sdp800_125Pa,
+    Sdp800_125Pa {
+        /// The chip revision number
+        revision: u8,
+    },
     /// SDP810 125 Pascal range with tube connection, I2C address 0x25
-    Sdp810_125Pa,
+    Sdp810_125Pa {
+        /// The chip revision number
+        revision: u8,
+    },
+}
+
+impl TryFrom<[u8; 4]> for ProductVariant {
+    type Error = Error<()>;
+
+    /// Parse the product variant. The last byte is the revision number and might change.
+    fn try_from(value: [u8; 4]) -> Result<Self, Self::Error> {
+        match value {
+            [0x03, 0x02, 0x01, n] => Ok(ProductVariant::Sdp800_500Pa { revision: n }),
+            [0x03, 0x02, 0x0A, n] => Ok(ProductVariant::Sdp810_500Pa { revision: n }),
+            [0x03, 0x02, 0x04, n] => Ok(ProductVariant::Sdp801_500Pa { revision: n }),
+            [0x03, 0x02, 0x0D, n] => Ok(ProductVariant::Sdp811_500Pa { revision: n }),
+            [0x03, 0x02, 0x02, n] => Ok(ProductVariant::Sdp800_125Pa { revision: n }),
+            [0x03, 0x02, 0x0B, n] => Ok(ProductVariant::Sdp810_125Pa { revision: n }),
+            _ => Err(Error::InvalidVariant),
+        }
+    }
 }
 
 impl ProductVariant {
-    /// Parse the product variant. The last byte is the revision number and might change.
-    pub fn parse(val: [u8; 4]) -> Option<(Self, u8)> {
-        match val {
-            [0x03, 0x02, 0x01, n] => Some((ProductVariant::Sdp800_500Pa, n)),
-            [0x03, 0x02, 0x0A, n] => Some((ProductVariant::Sdp810_500Pa, n)),
-            [0x03, 0x02, 0x04, n] => Some((ProductVariant::Sdp801_500Pa, n)),
-            [0x03, 0x02, 0x0D, n] => Some((ProductVariant::Sdp811_500Pa, n)),
-            [0x03, 0x02, 0x02, n] => Some((ProductVariant::Sdp800_125Pa, n)),
-            [0x03, 0x02, 0x0B, n] => Some((ProductVariant::Sdp810_125Pa, n)),
-            _ => None,
+    /// Get the conversion factor for differential pressure in 1/Pa
+    fn get_conversion_factor(&self) -> i16 {
+        match self {
+            ProductVariant::Sdp800_500Pa { .. } => 60,
+            ProductVariant::Sdp810_500Pa { .. } => 60,
+            ProductVariant::Sdp801_500Pa { .. } => 60,
+            ProductVariant::Sdp811_500Pa { .. } => 60,
+            ProductVariant::Sdp800_125Pa { .. } => 240,
+            ProductVariant::Sdp810_125Pa { .. } => 240,
+        }
+    }
+
+    /// Get the sensor default I2C address
+    fn get_default_i2c_address(&self) -> u8 {
+        match self {
+            ProductVariant::Sdp801_500Pa { .. } | ProductVariant::Sdp811_500Pa { .. } => 0x26,
+            _ => 0x25,
         }
     }
 }
@@ -331,7 +386,13 @@ mod tests {
         let expectations = [
             Transaction::write(0x25, Command::ReadProductId0.as_bytes()[..].into()),
             Transaction::write(0x25, Command::ReadProductId1.as_bytes()[..].into()),
-            Transaction::read(0x25, vec![0x00, 0x11, 0xF3, 0x22, 0x33, 0x12, 0x44, 0x55, 0x00, 0x66, 0x77, 0xE1, 0x88, 0x99, 0x24, 0xaa, 0xbb, 0xC5]),
+            Transaction::read(
+                0x25,
+                vec![
+                    0x00, 0x11, 0xF3, 0x22, 0x33, 0x12, 0x44, 0x55, 0x00, 0x66, 0x77, 0xE1, 0x88,
+                    0x99, 0x24, 0xaa, 0xbb, 0xC5,
+                ],
+            ),
         ];
         let mock = I2cMock::new(&expectations);
         let mut sdp = Sdp800::new(mock, 0x25, DelayMock);
