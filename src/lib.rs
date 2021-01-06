@@ -1,6 +1,6 @@
 //! A platform agnostic Rust driver for the Sensirion SDP800 differential pressure sensor, based
 //! on the [`embedded-hal`](https://github.com/japaric/embedded-hal) traits.
-//! Heavily inspired by the [`sbp30 driver by Danilo Bergen`](https://github.com/dbrgn/sgp30-rs)
+//! Heavily inspired by the [`sgp30 driver by Danilo Bergen`](https://github.com/dbrgn/sgp30-rs)
 //!
 //! ## The Device
 //!
@@ -34,16 +34,14 @@
 //! You can fetch the product id of your sensor:
 //!
 //! ```no_run
-//! # use linux_embedded_hal as hal;
-//! # use hal::{Delay, I2cdev};
-//! # use sdp800::ProductIdentifier;
-//! # use sdp800::Sdp800;
+//! use linux_embedded_hal as hal;
+//! use hal::{Delay, I2cdev};
+//! use sdp800::ProductIdentifier;
+//! use sdp800::Sdp800;
 //!
-//! # fn main() {
-//! # let dev = I2cdev::new("/dev/i2c-1").unwrap();
-//! # let mut sdp = Sdp800::new(dev, 0x25, Delay);
-//! # let product_id: ProductIdentifier = sdp.product_id().unwrap();
-//! # }
+//! let dev = I2cdev::new("/dev/i2c-1").unwrap();
+//! let mut sdp = Sdp800::new(dev, 0x25, Delay);
+//! let product_id: ProductIdentifier = sdp.read_product_id().unwrap();
 //!
 //! ```
 //!
@@ -63,6 +61,7 @@
 use core::convert::TryFrom;
 
 use embedded_hal as hal;
+use i2c::read_words_with_crc;
 
 use crate::hal::blocking::delay::{DelayMs, DelayUs};
 use crate::hal::blocking::i2c::{Read, Write, WriteRead};
@@ -96,10 +95,24 @@ where
 /// I2C commands sent to the sensor.
 #[derive(Debug, Copy, Clone)]
 enum Command {
+    /// General Call Reset
+    GeneralCallReset,
     /// Read product identifier 1
     ReadProductId0,
     /// Read product identifier 2
     ReadProductId1,
+    /// Enter sleep mode
+    EnterSleepMode,
+    /// Trigger Mass Flow Reading with no clock stretching
+    TriggerMassFlowRead,
+    /// Trigger Mass Flow Reading with clock stretching
+    TriggerMassFlowReadSync,
+    /// Trigger Differential Pressure Reading with no clock stretching
+    TriggerDifferentialPressureRead,
+    /// Trigger Differential Pressure Reading with clock stretching
+    TriggerDifferentialPressureReadSync,
+    /// Stop continuous measurement
+    StopContinuousMeasurement,
 }
 
 impl Command {
@@ -107,6 +120,13 @@ impl Command {
         match self {
             Command::ReadProductId0 => [0x36, 0x7C],
             Command::ReadProductId1 => [0xE1, 0x02],
+            Command::TriggerMassFlowRead => [0x36, 0x24],
+            Command::TriggerMassFlowReadSync => [0x37, 0x26],
+            Command::TriggerDifferentialPressureRead => [0x36, 0x2F],
+            Command::TriggerDifferentialPressureReadSync => [0x37, 0x2D],
+            Command::GeneralCallReset => [0x00, 0x06],
+            Command::EnterSleepMode => [0x36, 0x77],
+            Command::StopContinuousMeasurement => [0x3F, 0xF9],
         }
     }
 }
@@ -172,7 +192,7 @@ where
     }
 
     /// Return the product id of the SDP800
-    pub fn product_id(&mut self) -> Result<ProductIdentifier, Error<E>> {
+    pub fn read_product_id(&mut self) -> Result<ProductIdentifier, Error<E>> {
         let mut buf = [0; 18];
         // Request product id
         self.send_command(Command::ReadProductId0)?;
@@ -181,6 +201,20 @@ where
         self.i2c.read(self.address, &mut buf).map_err(Error::I2c)?;
 
         ProductIdentifier::try_from(buf).map_err(|_| Error::Crc)
+    }
+
+    /// Trigger a differential pressure read without clock stretching.
+    /// This function blocks for at least 60 milliseconds to await a result.
+    pub fn read_sample_triggered(&mut self) -> Result<Measurement, Error<E>> {
+        let mut buffer = [0; 9];
+
+        self.send_command(Command::TriggerDifferentialPressureRead)?;
+
+        self.delay.delay_ms(60);
+
+        read_words_with_crc(&mut self.i2c, self.address, &mut buffer)?;
+
+        Measurement::try_from(buffer).map_err(|_| Error::Crc)
     }
 }
 
@@ -198,6 +232,7 @@ impl TryFrom<[u8; 18]> for ProductIdentifier {
         if validate(&buf).is_err() {
             return Err(Error::Crc);
         }
+
         let product_number: u32 = (buf[0] as u32) << 24
             | (buf[1] as u32) << 16
             | (buf[3] as u32) << 8
@@ -220,12 +255,34 @@ impl TryFrom<[u8; 18]> for ProductIdentifier {
 }
 
 /// A measurement result from the sensor.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Measurement {
     /// Pressure in Pa
-    pub differential_pressure: u16,
+    pub differential_pressure: f32,
     /// Temperature reading
-    pub temperature: i16,
+    pub temperature: f32,
+}
+
+impl TryFrom<[u8; 9]> for Measurement {
+    type Error = Error<()>;
+
+    fn try_from(buffer: [u8; 9]) -> Result<Self, Self::Error> {
+        if validate(&buffer).is_err() {
+            return Err(Error::Crc);
+        }
+
+        let dp_raw: i16 = (buffer[0] as i16) << 8 | buffer[1] as i16;
+        let temp_raw: i16 = (buffer[3] as i16) << 8 | buffer[4] as i16;
+        let dp_scale: i16 = (buffer[6] as i16) << 8 | buffer[7] as i16;
+
+        let differential_pressure = dp_raw as f32 / dp_scale as f32;
+        let temperature = temp_raw as f32 / 200.0f32;
+
+        Ok(Measurement {
+            differential_pressure,
+            temperature,
+        })
+    }
 }
 
 /// Product variant as listed in the datasheet
@@ -278,7 +335,7 @@ mod tests {
         ];
         let mock = I2cMock::new(&expectations);
         let mut sdp = Sdp800::new(mock, 0x25, DelayMock);
-        let id = sdp.product_id().unwrap();
+        let id = sdp.read_product_id().unwrap();
         assert_eq!(0x00112233, id.product_number);
         assert_eq!(0x445566778899aabb, id.serial_number);
         sdp.destroy().done();
