@@ -21,8 +21,7 @@ The Sensirion SDP800 is a differential pressure sensor. It has an I²C interface
 
 Licensed under
 
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or
-   http://opensource.org/licenses/MIT) at your option.
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 <!-- Badges -->
 [no-std-badge]: https://img.shields.io/badge/no__std-yes-blue

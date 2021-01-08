@@ -1,11 +1,11 @@
 [package]
-name = "sdp800"
+name = "sdp8xx"
 version = "0.1.0"
 authors = ["Rafael Bachmann <rafael.bachmann.93@gmail.com>"]
 license = "MIT"
-description = "Platform agnostic Rust driver for the Sensirion SDP800 differential pressure sensor."
+description = "Platform agnostic Rust driver for the Sensirion SDP8xx differential pressure sensor."
 readme = "README.md"
-keywords = ["sdp800", "sensirion", "driver", "embedded-hal-driver"]
+keywords = ["sdp8xx", "sensirion", "driver", "embedded-hal-driver"]
 categories = ["embedded", "hardware-support", "no-std"]
 edition = "2018"
 

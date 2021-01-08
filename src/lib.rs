@@ -1,10 +1,10 @@
-//! A platform agnostic Rust driver for the Sensirion SDP800 differential pressure sensor, based
+//! A platform agnostic Rust driver for the Sensirion SDP8xx differential pressure sensor, based
 //! on the [`embedded-hal`](https://github.com/japaric/embedded-hal) traits.
 //! Heavily inspired by the [`sgp30 driver by Danilo Bergen`](https://github.com/dbrgn/sgp30-rs)
 //!
 //! ## The Device
 //!
-//! The Sensirion SDP800 is a differential pressure sensor. It has an I2C interface.
+//! The Sensirion SDP8xx is a differential pressure sensor. It has an I2C interface.
 //!
 //! - [Datasheet](https://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/8_Differential_Pressure/Datasheets/Sensirion_Differential_Pressure_Sensors_SDP8xx_Digital_Datasheet.pdf)
 //! - [Product Page](https://www.sensirion.com/en/flow-sensors/differential-pressure-sensors/sdp800-proven-and-improved/)
@@ -20,12 +20,12 @@
 //! use linux_embedded_hal as hal;
 //!
 //! use hal::{Delay, I2cdev};
-//! use sdp800::Sdp800;
+//! use sdp8xx::Sdp8xx;
 //!
 //! # fn main() {
 //! let dev = I2cdev::new("/dev/i2c-1").unwrap();
 //! let address = 0x25;
-//! let mut sdp = Sdp800::new(dev, address, Delay);
+//! let mut sdp = Sdp8xx::new(dev, address, Delay);
 //! # }
 //! ```
 //!
@@ -36,16 +36,16 @@
 //! ```no_run
 //! use linux_embedded_hal as hal;
 //! use hal::{Delay, I2cdev};
-//! use sdp800::ProductIdentifier;
-//! use sdp800::Sdp800;
+//! use sdp8xx::ProductIdentifier;
+//! use sdp8xx::Sdp8xx;
 //!
 //! let dev = I2cdev::new("/dev/i2c-1").unwrap();
-//! let mut sdp = Sdp800::new(dev, 0x25, Delay);
+//! let mut sdp = Sdp8xx::new(dev, 0x25, Delay);
 //! let product_id: ProductIdentifier = sdp.read_product_id().unwrap();
 //!
 //! ```
 //!
-//! The SDP800 uses a dynamic baseline compensation algorithm and on-chip
+//! The SDP8xx uses a dynamic baseline compensation algorithm and on-chip
 //! calibration parameters to provide two complementary air quality signals.
 //! Calling this method starts the air quality measurement. **After
 //! initializing the measurement, the `measure()` method must be called in
@@ -143,9 +143,9 @@ impl Command {
     }
 }
 
-/// Driver for the SDP800
+/// Driver for the SDP8xx
 #[derive(Debug, Default)]
-pub struct Sdp800<I2C, D> {
+pub struct Sdp8xx<I2C, D> {
     /// The concrete I2C device implementation.
     i2c: I2C,
     /// The I2C device address.
@@ -154,15 +154,15 @@ pub struct Sdp800<I2C, D> {
     delay: D,
 }
 
-impl<I2C, D, E> Sdp800<I2C, D>
+impl<I2C, D, E> Sdp8xx<I2C, D>
 where
     I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
     D: DelayUs<u16> + DelayMs<u16>,
 {
-    /// Create a new instance of the SDP800 driver.
+    /// Create a new instance of the SDP8xx driver.
     pub fn new(i2c: I2C, address: u8, delay: D) -> Self {
         // TODO try to communicate and get parameters from chip
-        Sdp800 {
+        Sdp8xx {
             i2c,
             address,
             delay,
@@ -204,7 +204,7 @@ where
         self.i2c.write(self.address, payload).map_err(Error::I2c)
     }
 
-    /// Return the product id of the SDP800
+    /// Return the product id of the SDP8xx
     pub fn read_product_id(&mut self) -> Result<ProductIdentifier, Error<E>> {
         let mut buf = [0; 18];
         // Request product id
@@ -395,7 +395,7 @@ mod tests {
             ),
         ];
         let mock = I2cMock::new(&expectations);
-        let mut sdp = Sdp800::new(mock, 0x25, DelayMock);
+        let mut sdp = Sdp8xx::new(mock, 0x25, DelayMock);
         let id = sdp.read_product_id().unwrap();
         assert_eq!(0x00112233, id.product_number);
         assert_eq!(0x445566778899aabb, id.serial_number);
