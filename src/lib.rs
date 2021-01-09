@@ -61,8 +61,10 @@
 use core::convert::TryFrom;
 
 pub mod product_info;
-
 pub use crate::product_info::*;
+
+pub mod command;
+use crate::command::Command;
 
 use embedded_hal as hal;
 use i2c::read_words_with_crc;
@@ -97,55 +99,6 @@ where
             i2c::Error::WrongBufferSize => Error::WrongBufferSize,
             i2c::Error::I2cWrite(e) => Error::I2c(e),
             i2c::Error::I2cRead(e) => Error::I2c(e),
-        }
-    }
-}
-
-/// I2C commands sent to the sensor.
-/// Missing commands: General call reset, exit sleep mode
-#[derive(Debug, Copy, Clone)]
-enum Command {
-    /// Trigger Mass Flow Reading with no clock stretching
-    TriggerMassFlowRead,
-    /// Trigger Mass Flow Reading with clock stretching
-    TriggerMassFlowReadSync,
-    /// Trigger Differential Pressure Reading with no clock stretching
-    TriggerDifferentialPressureRead,
-    /// Trigger Differential Pressure Reading with clock stretching
-    TriggerDifferentialPressureReadSync,
-    /// Continuous Mass Flow Sampling with Average till read
-    SampleMassFlowAveraging,
-    /// Continuous Mass Flow Sampling with no averaging
-    SampleMassFlowAveragingRaw,
-    /// Continuous Differential Pressure Sampling with Average till read
-    SampleDifferentialPressureAveraging,
-    /// Continuous Differential Pressure Sampling with no averaging
-    SampleDifferentialPressureAveragingRaw,
-    /// Stop continuous measurement
-    StopContinuousMeasurement,
-    /// Enter sleep mode
-    EnterSleepMode,
-    /// Read product identifier 0
-    ReadProductId0,
-    /// Read product identifier 1
-    ReadProductId1,
-}
-
-impl Command {
-    fn as_bytes(self) -> [u8; 2] {
-        match self {
-            Command::TriggerMassFlowRead => [0x36, 0x24],
-            Command::TriggerMassFlowReadSync => [0x37, 0x26],
-            Command::TriggerDifferentialPressureRead => [0x36, 0x2F],
-            Command::TriggerDifferentialPressureReadSync => [0x37, 0x2D],
-            Command::SampleMassFlowAveraging => [0x36, 0x03],
-            Command::SampleMassFlowAveragingRaw => [0x36, 0x08],
-            Command::SampleDifferentialPressureAveraging => [0x36, 0x15],
-            Command::SampleDifferentialPressureAveragingRaw => [0x36, 0x1E],
-            Command::StopContinuousMeasurement => [0x3F, 0xF9],
-            Command::EnterSleepMode => [0x36, 0x77],
-            Command::ReadProductId0 => [0x36, 0x7C],
-            Command::ReadProductId1 => [0xE1, 0x02],
         }
     }
 }
@@ -281,21 +234,22 @@ mod tests {
     #[test]
     fn test_product_id() {
         let data = vec![
-            0x03, 0x02, 206, 0x02, 0x01, 105, 0x44, 0x55, 0x00, 0x66, 0x77, 225, 0x88,
-            0x99, 0x24, 0xaa, 0xbb, 0xC5];
+            0x03, 0x02, 206, 0x02, 0x01, 105, 0x44, 0x55, 0x00, 0x66, 0x77, 225, 0x88, 0x99, 0x24,
+            0xaa, 0xbb, 0xC5,
+        ];
         let expectations = [
             Transaction::write(0x25, Command::ReadProductId0.as_bytes()[..].into()),
             Transaction::write(0x25, Command::ReadProductId1.as_bytes()[..].into()),
-            Transaction::read(
-                0x25,
-                data.clone()
-            ),
+            Transaction::read(0x25, data.clone()),
         ];
         //println!("{:x}", crc8::calculate(&data[15..17]));
         let mock = I2cMock::new(&expectations);
         let mut sdp = Sdp8xx::new(mock, 0x25, DelayMock);
         let id = sdp.read_product_id().unwrap();
-        assert_eq!(ProductVariant::Sdp800_125Pa { revision: 0x01 }, id.product_number);
+        assert_eq!(
+            ProductVariant::Sdp800_125Pa { revision: 0x01 },
+            id.product_number
+        );
         assert_eq!(0x445566778899aabb, id.serial_number);
         sdp.destroy().done();
     }

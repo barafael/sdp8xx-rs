@@ -3,7 +3,7 @@
 use core::convert::TryFrom;
 use core::convert::TryInto;
 
-use sensirion_i2c::crc8::{*, self};
+use sensirion_i2c::crc8::{self, *};
 
 /// Product Identification Error
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -40,11 +40,11 @@ impl TryFrom<[u8; 18]> for ProductIdentifier {
     fn try_from(buf: [u8; 18]) -> Result<Self, Self::Error> {
         validate(&buf)?;
 
-        let product_number = (
-              (buf[0] as u32) << 24
+        let product_number = ((buf[0] as u32) << 24
             | (buf[1] as u32) << 16
             | (buf[3] as u32) << 8
-            | (buf[4] as u32) << 0).try_into()?;
+            | (buf[4] as u32) << 0)
+            .try_into()?;
 
         let serial_number: u64 = (buf[6] as u64) << 56
             | (buf[7] as u64) << 48
@@ -134,4 +134,40 @@ impl ProductVariant {
             _ => 0x25,
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test getting the default i2c address
+    #[test]
+    fn test_default_i2c_address() {
+        let data = [
+            0x03, 0x02, 206, 0x02, 0x01, 105, 0x44, 0x55, 0x00, 0x66, 0x77, 225, 0x88, 0x99, 0x24,
+            0xaa, 0xbb, 0xC5,
+        ];
+        let product_id = ProductIdentifier::try_from(data).unwrap();
+        assert_eq!(
+            ProductVariant::Sdp800_125Pa { revision: 0x01 },
+            product_id.product_number
+        );
+        assert_eq!(0x25, product_id.product_number.get_default_i2c_address());
+    }
+
+    /// Test getting the default conversion factor
+    #[test]
+    fn test_default_conversion_factor() {
+        let data = [
+            0x03, 0x02, 206, 0x02, 0x01, 105, 0x44, 0x55, 0x00, 0x66, 0x77, 225, 0x88, 0x99, 0x24,
+            0xaa, 0xbb, 0xC5,
+        ];
+        let product_id = ProductIdentifier::try_from(data).unwrap();
+        assert_eq!(
+            ProductVariant::Sdp800_125Pa { revision: 0x01 },
+            product_id.product_number
+        );
+        assert_eq!(240, product_id.product_number.get_default_conversion_factor());
+    }
+
 }
