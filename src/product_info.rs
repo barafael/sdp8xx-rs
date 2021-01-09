@@ -167,7 +167,9 @@ mod tests {
             ProductVariant::Sdp800_125Pa { revision: 0x01 },
             product_id.product_number
         );
-        assert_eq!(240, product_id.product_number.get_default_conversion_factor());
+        assert_eq!(
+            240,
+            product_id.product_number.get_default_conversion_factor()
+        );
     }
-
 }

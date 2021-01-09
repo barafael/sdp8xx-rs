@@ -85,7 +85,7 @@ pub enum Error<E> {
     /// Wake up sent while sensor was not in sleep state
     WakeUpWhileNotSleeping,
     /// Cannot wake up sensor
-    CannotWakeUp
+    CannotWakeUp,
 }
 
 impl<E, I2cWrite, I2cRead> From<i2c::Error<I2cWrite, I2cRead>> for Error<E>
@@ -113,7 +113,7 @@ pub struct Sdp8xx<I2C, D, State> {
     /// The concrete Delay implementation.
     delay: D,
     /// The state of the sensor
-    state: PhantomData::<State>,
+    state: PhantomData<State>,
 }
 
 impl<I2C, D, E> Sdp8xx<I2C, D, IdleState>
@@ -128,7 +128,7 @@ where
             i2c,
             address,
             delay,
-            state: PhantomData::<IdleState>
+            state: PhantomData::<IdleState>,
         }
     }
 
@@ -196,13 +196,15 @@ where
     }
 
     /// Start sampling in continuous mode
-    pub fn start_sampling_differential_pressure_avg(mut self) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState>, Error<E>> {
+    pub fn start_sampling_differential_pressure_avg(
+        mut self,
+    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState>, Error<E>> {
         self.send_command(Command::SampleDifferentialPressureAveraging)?;
         Ok(Sdp8xx {
             i2c: self.i2c,
             address: self.address,
             delay: self.delay,
-            state: PhantomData::<ContinuousSamplingState>
+            state: PhantomData::<ContinuousSamplingState>,
         })
     }
 
@@ -231,7 +233,7 @@ where
         // TODO this does not work currently!
         match self.i2c.write(self.address, &[]) {
             Ok(_) => return Err(Error::WakeUpWhileNotSleeping),
-            Err(_) => {},
+            Err(_) => {}
         }
         self.delay.delay_ms(3);
         match self.i2c.write(self.address, &[]) {
@@ -256,12 +258,14 @@ where
     pub fn read_continuous_sample(&mut self) -> Result<Sample, Error<E>> {
         let mut buffer = [0u8; 9];
         // TODO rate limiting no faster than 0.5ms
-        self.i2c.read(self.address, &mut buffer).map_err(Error::I2c)?;
+        self.i2c
+            .read(self.address, &mut buffer)
+            .map_err(Error::I2c)?;
         let sample = Sample::try_from(buffer);
         if sample.is_err() {
             return Err(Error::WrongBufferSize);
         } else {
-            return Ok(sample.unwrap())
+            return Ok(sample.unwrap());
         }
     }
 }
