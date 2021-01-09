@@ -44,15 +44,6 @@
 //! let product_id: ProductIdentifier = sdp.read_product_id().unwrap();
 //!
 //! ```
-//!
-//! The SDP8xx uses a dynamic baseline compensation algorithm and on-chip
-//! calibration parameters to provide two complementary air quality signals.
-//! Calling this method starts the air quality measurement. **After
-//! initializing the measurement, the `measure()` method must be called in
-//! regular intervals of 1 second** to ensure proper operation of the dynamic
-//! baseline compensation algorithm. It is the responsibility of the user of
-//! this driver to ensure that these periodic measurements are being done!
-//!
 
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
@@ -66,14 +57,15 @@ pub use crate::product_info::*;
 pub mod command;
 use crate::command::Command;
 
+pub mod sample;
+pub use crate::sample::*;
+
 use embedded_hal as hal;
 use i2c::read_words_with_crc;
 
 use crate::hal::blocking::delay::{DelayMs, DelayUs};
 use crate::hal::blocking::i2c::{Read, Write, WriteRead};
 use sensirion_i2c::{crc8, i2c};
-
-use crc8::validate;
 
 /// All possible errors in this crate
 #[derive(Debug)]
@@ -147,7 +139,9 @@ where
     ///
     /// CRC checksums will automatically be added to the data.
     fn send_command_and_data(&mut self, command: Command, data: &[u8]) -> Result<(), Error<E>> {
-        assert!(data.len() == 2 || data.len() == 4);
+        if data.len() != 2 && data.len() != 4 {
+            return Err(Error::WrongBufferSize);
+        }
         let mut buf = [0; 2 /* command */ + 6 /* max length of data + crc */];
         buf[0..2].copy_from_slice(&command.as_bytes());
         buf[2..4].copy_from_slice(&data[0..2]);
@@ -178,7 +172,7 @@ where
 
     /// Trigger a differential pressure read without clock stretching.
     /// This function blocks for at least 60 milliseconds to await a result.
-    pub fn read_sample_triggered(&mut self) -> Result<Measurement, Error<E>> {
+    pub fn read_sample_triggered(&mut self) -> Result<Sample, Error<E>> {
         let mut buffer = [0; 9];
 
         self.send_command(Command::TriggerDifferentialPressureRead)?;
@@ -187,40 +181,10 @@ where
 
         read_words_with_crc(&mut self.i2c, self.address, &mut buffer)?;
 
-        Measurement::try_from(buffer).map_err(|_| Error::WrongCrc)
+        Sample::try_from(buffer).map_err(|_| Error::WrongCrc)
     }
 }
 
-/// A measurement result from the sensor.
-#[derive(Debug, PartialEq, Clone)]
-pub struct Measurement {
-    /// Pressure in Pa
-    pub differential_pressure: f32,
-    /// Temperature reading
-    pub temperature: f32,
-}
-
-impl TryFrom<[u8; 9]> for Measurement {
-    type Error = Error<()>;
-
-    fn try_from(buffer: [u8; 9]) -> Result<Self, Self::Error> {
-        if validate(&buffer).is_err() {
-            return Err(Error::WrongCrc);
-        }
-
-        let dp_raw: i16 = (buffer[0] as i16) << 8 | buffer[1] as i16;
-        let temp_raw: i16 = (buffer[3] as i16) << 8 | buffer[4] as i16;
-        let dp_scale: i16 = (buffer[6] as i16) << 8 | buffer[7] as i16;
-
-        let differential_pressure = dp_raw as f32 / dp_scale as f32;
-        let temperature = temp_raw as f32 / 200.0f32;
-
-        Ok(Measurement {
-            differential_pressure,
-            temperature,
-        })
-    }
-}
 
 #[cfg(test)]
 mod tests {
