@@ -195,6 +195,17 @@ where
         Sample::try_from(buffer).map_err(|_| Error::WrongCrc)
     }
 
+    /// Start sampling in continuous mode
+    pub fn start_sampling_differential_pressure_avg(mut self) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState>, Error<E>> {
+        self.send_command(Command::SampleDifferentialPressureAveraging)?;
+        Ok(Sdp8xx {
+            i2c: self.i2c,
+            address: self.address,
+            delay: self.delay,
+            state: PhantomData::<ContinuousSamplingState>
+        })
+    }
+
     /// Enter the SDP8xx sleep state
     pub fn go_to_sleep(mut self) -> Result<Sdp8xx<I2C, D, SleepState>, Error<E>> {
         self.send_command(Command::EnterSleepMode)?;
@@ -217,6 +228,7 @@ where
     pub fn wake_up(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
         // TODO polling with timeout.
         // Send wake up signal (not acked)
+        // TODO this does not work currently!
         match self.i2c.write(self.address, &[]) {
             Ok(_) => return Err(Error::WakeUpWhileNotSleeping),
             Err(_) => {},
@@ -232,6 +244,25 @@ where
             delay: self.delay,
             state: PhantomData::<IdleState>,
         })
+    }
+}
+
+impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState>
+where
+    I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
+    D: DelayUs<u16> + DelayMs<u16>,
+{
+    /// Read a sample in continuous mode
+    pub fn read_continuous_sample(&mut self) -> Result<Sample, Error<E>> {
+        let mut buffer = [0u8; 9];
+        // TODO rate limiting no faster than 0.5ms
+        self.i2c.read(self.address, &mut buffer).map_err(Error::I2c)?;
+        let sample = Sample::try_from(buffer);
+        if sample.is_err() {
+            return Err(Error::WrongBufferSize);
+        } else {
+            return Ok(sample.unwrap())
+        }
     }
 }
 
