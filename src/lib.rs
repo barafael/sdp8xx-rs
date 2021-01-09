@@ -66,7 +66,7 @@ use i2c::read_words_with_crc;
 
 use crate::hal::blocking::delay::{DelayMs, DelayUs};
 use crate::hal::blocking::i2c::{Read, Write, WriteRead};
-use sensirion_i2c::{crc8, i2c};
+use sensirion_i2c::i2c;
 
 pub mod states;
 use crate::states::*;
@@ -144,31 +144,6 @@ where
             .map_err(Error::I2c)
     }
 
-    /// Write an I2C command and data to the sensor.
-    ///
-    /// The data slice must have a length of 2 or 4.
-    ///
-    /// CRC checksums will automatically be added to the data.
-    fn send_command_and_data(&mut self, command: Command, data: &[u8]) -> Result<(), Error<E>> {
-        if data.len() != 2 && data.len() != 4 {
-            return Err(Error::WrongBufferSize);
-        }
-        let mut buf = [0; 2 /* command */ + 6 /* max length of data + crc */];
-        buf[0..2].copy_from_slice(&command.as_bytes());
-        buf[2..4].copy_from_slice(&data[0..2]);
-        buf[4] = crc8::calculate(&data[0..2]);
-        if data.len() > 2 {
-            buf[5..7].copy_from_slice(&data[2..4]);
-            buf[7] = crc8::calculate(&data[2..4]);
-        }
-        let payload = if data.len() > 2 {
-            &buf[0..8]
-        } else {
-            &buf[0..5]
-        };
-        self.i2c.write(self.address, payload).map_err(Error::I2c)
-    }
-
     /// Return the product id of the SDP8xx
     pub fn read_product_id(&mut self) -> Result<ProductIdentifier, Error<E>> {
         let mut buf = [0; 18];
@@ -223,6 +198,21 @@ where
             state: PhantomData::<SleepState>,
         })
     }
+
+    /// Test function
+    pub fn go_to_sleep_then_wake_up(&mut self) -> Result<u32, Error<E>> {
+        self.send_command(Command::EnterSleepMode)?;
+        self.delay.delay_ms(50u16);
+        let mut counter = 0;
+        let mut woke = false;
+        while !woke {
+            counter += 1;
+            if self.i2c.write(self.address, &[]).is_ok() {
+                woke = true;
+            }
+        }
+        Ok(counter)
+    }
 }
 
 impl<I2C, D, E> Sdp8xx<I2C, D, SleepState>
@@ -235,7 +225,7 @@ where
     pub fn wake_up(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
         // TODO polling with timeout.
         // Send wake up signal (not acked)
-        // TODO this does not work currently!
+        // TODO this does not work currently on the hardware, though the unit tests are fine.
         match self.i2c.write(self.address, &[]) {
             Ok(_) => return Err(Error::WakeUpWhileNotSleeping),
             Err(_) => {}
@@ -244,6 +234,30 @@ where
         match self.i2c.write(self.address, &[]) {
             Ok(_) => {}
             Err(_) => return Err(Error::CannotWakeUp),
+        }
+        Ok(Sdp8xx {
+            i2c: self.i2c,
+            address: self.address,
+            delay: self.delay,
+            state: PhantomData::<IdleState>,
+        })
+    }
+
+    /// Wake the sensor up from the sleep state by polling the I2C bus
+    /// This function blocks for at least 2 milliseconds
+    pub fn wake_up_poll(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
+        // TODO timeout
+        // Send wake up signal (not acked)
+        // TODO this does not work currently on the hardware, though the unit tests are fine.
+        match self.i2c.write(self.address, &[]) {
+            Ok(_) => return Err(Error::WakeUpWhileNotSleeping),
+            Err(_) => {}
+        }
+        loop {
+            // timeout here
+            if self.i2c.write(self.address, &[]).is_ok() {
+                break;
+            }
         }
         Ok(Sdp8xx {
             i2c: self.i2c,
@@ -290,6 +304,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::io::ErrorKind;
+    use hal::MockError;
+
     use embedded_hal_mock as hal;
 
     use self::hal::delay::MockNoop as DelayMock;
@@ -317,6 +334,48 @@ mod tests {
             id.product_number
         );
         assert_eq!(0x445566778899aabb, id.serial_number);
+        sdp.destroy().done();
+    }
+
+    /// Test the sleep function
+    #[test]
+    fn test_go_to_sleep() {
+        let expectations = [
+            Transaction::write(0x25, Command::EnterSleepMode.as_bytes()[..].into()),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]),
+        ];
+        let mock = I2cMock::new(&expectations);
+        let sdp = Sdp8xx::new(mock, 0x25, DelayMock);
+        let sleeping = sdp.go_to_sleep().unwrap();
+        let sdp = sleeping.wake_up().unwrap();
+        sdp.destroy().done();
+    }
+
+    /// Test waking up from sleep by polling
+    #[test]
+    fn test_wakeup_by_polling() {
+        let expectations = [
+            Transaction::write(0x25, Command::EnterSleepMode.as_bytes()[..].into()),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+            Transaction::write(0x25, vec![]),
+        ];
+        let mock = I2cMock::new(&expectations);
+        let sdp = Sdp8xx::new(mock, 0x25, DelayMock);
+        let sleeping = sdp.go_to_sleep().unwrap();
+        let sdp = sleeping.wake_up_poll().unwrap();
         sdp.destroy().done();
     }
 }
