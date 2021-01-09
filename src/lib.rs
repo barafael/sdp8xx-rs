@@ -50,6 +50,7 @@
 #![cfg_attr(not(test), no_std)]
 
 use core::convert::TryFrom;
+use core::marker::PhantomData;
 
 pub mod product_info;
 pub use crate::product_info::*;
@@ -67,6 +68,9 @@ use crate::hal::blocking::delay::{DelayMs, DelayUs};
 use crate::hal::blocking::i2c::{Read, Write, WriteRead};
 use sensirion_i2c::{crc8, i2c};
 
+pub mod states;
+use crate::states::*;
+
 /// All possible errors in this crate
 #[derive(Debug)]
 pub enum Error<E> {
@@ -78,6 +82,10 @@ pub enum Error<E> {
     WrongBufferSize,
     /// Invalid sensor variant
     InvalidVariant,
+    /// Wake up sent while sensor was not in sleep state
+    WakeUpWhileNotSleeping,
+    /// Cannot wake up sensor
+    CannotWakeUp
 }
 
 impl<E, I2cWrite, I2cRead> From<i2c::Error<I2cWrite, I2cRead>> for Error<E>
@@ -97,16 +105,18 @@ where
 
 /// Driver for the SDP8xx
 #[derive(Debug, Default)]
-pub struct Sdp8xx<I2C, D> {
+pub struct Sdp8xx<I2C, D, State> {
     /// The concrete I2C device implementation.
     i2c: I2C,
     /// The I2C device address.
     address: u8,
     /// The concrete Delay implementation.
     delay: D,
+    /// The state of the sensor
+    state: PhantomData::<State>,
 }
 
-impl<I2C, D, E> Sdp8xx<I2C, D>
+impl<I2C, D, E> Sdp8xx<I2C, D, IdleState>
 where
     I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
     D: DelayUs<u16> + DelayMs<u16>,
@@ -118,6 +128,7 @@ where
             i2c,
             address,
             delay,
+            state: PhantomData::<IdleState>
         }
     }
 
@@ -183,8 +194,46 @@ where
 
         Sample::try_from(buffer).map_err(|_| Error::WrongCrc)
     }
+
+    /// Enter the SDP8xx sleep state
+    pub fn go_to_sleep(mut self) -> Result<Sdp8xx<I2C, D, SleepState>, Error<E>> {
+        self.send_command(Command::EnterSleepMode)?;
+        Ok(Sdp8xx {
+            i2c: self.i2c,
+            address: self.address,
+            delay: self.delay,
+            state: PhantomData::<SleepState>,
+        })
+    }
 }
 
+impl<I2C, D, E> Sdp8xx<I2C, D, SleepState>
+where
+    I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
+    D: DelayUs<u16> + DelayMs<u16>,
+{
+    /// Wake the sensor up from the sleep state
+    /// This function blocks for at least 2 milliseconds
+    pub fn wake_up(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
+        // TODO polling with timeout.
+        // Send wake up signal (not acked)
+        match self.i2c.write(self.address, &[]) {
+            Ok(_) => return Err(Error::WakeUpWhileNotSleeping),
+            Err(_) => {},
+        }
+        self.delay.delay_ms(3);
+        match self.i2c.write(self.address, &[]) {
+            Ok(_) => {}
+            Err(_) => return Err(Error::CannotWakeUp),
+        }
+        Ok(Sdp8xx {
+            i2c: self.i2c,
+            address: self.address,
+            delay: self.delay,
+            state: PhantomData::<IdleState>,
+        })
+    }
+}
 
 #[cfg(test)]
 mod tests {
