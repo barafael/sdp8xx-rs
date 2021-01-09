@@ -196,10 +196,15 @@ where
     }
 
     /// Start sampling in continuous mode
-    pub fn start_sampling_differential_pressure_avg(
-        mut self,
+    pub fn start_sampling_differential_pressure(
+        mut self, averaging: bool
     ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState>, Error<E>> {
-        self.send_command(Command::SampleDifferentialPressureAveraging)?;
+        let command = if averaging {
+            Command::SampleDifferentialPressureAveraging
+        } else {
+            Command::SampleDifferentialPressureAveragingRaw
+        };
+        self.send_command(command)?;
         Ok(Sdp8xx {
             i2c: self.i2c,
             address: self.address,
@@ -267,6 +272,19 @@ where
         } else {
             return Ok(sample.unwrap());
         }
+    }
+
+    /// Stop sampling continuous mode
+    pub fn stop_sampling(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
+        self.i2c
+            .write(self.address, &Command::StopContinuousMeasurement.as_bytes())
+            .map_err(Error::I2c)?;
+        Ok(Sdp8xx {
+            i2c: self.i2c,
+            address: self.address,
+            delay: self.delay,
+            state: PhantomData::<IdleState>,
+        })
     }
 }
 

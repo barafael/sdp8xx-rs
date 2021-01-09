@@ -1,4 +1,5 @@
 //! State types for the SDP8xx
+
 /// Default idle state of the SDP8xx
 pub struct IdleState {}
 
