@@ -75,7 +75,9 @@ pub enum Error<E> {
     /// I2C bus error
     I2c(E),
     /// CRC checksum validation failed
-    Crc,
+    WrongCrc,
+    /// Wrong Buffer Size
+    WrongBufferSize,
     /// Invalid sensor variant
     InvalidVariant,
 }
@@ -87,7 +89,8 @@ where
 {
     fn from(err: i2c::Error<I2cWrite, I2cRead>) -> Self {
         match err {
-            i2c::Error::Crc => Error::Crc,
+            i2c::Error::WrongCrc => Error::WrongCrc,
+            i2c::Error::WrongBufferSize => Error::WrongBufferSize,
             i2c::Error::I2cWrite(e) => Error::I2c(e),
             i2c::Error::I2cRead(e) => Error::I2c(e),
         }
@@ -213,7 +216,7 @@ where
 
         self.i2c.read(self.address, &mut buf).map_err(Error::I2c)?;
 
-        ProductIdentifier::try_from(buf).map_err(|_| Error::Crc)
+        ProductIdentifier::try_from(buf).map_err(|_| Error::WrongCrc)
     }
 
     /// Trigger a differential pressure read without clock stretching.
@@ -227,7 +230,7 @@ where
 
         read_words_with_crc(&mut self.i2c, self.address, &mut buffer)?;
 
-        Measurement::try_from(buffer).map_err(|_| Error::Crc)
+        Measurement::try_from(buffer).map_err(|_| Error::WrongCrc)
     }
 }
 
@@ -243,7 +246,7 @@ impl TryFrom<[u8; 18]> for ProductIdentifier {
 
     fn try_from(buf: [u8; 18]) -> Result<Self, Self::Error> {
         if validate(&buf).is_err() {
-            return Err(Error::Crc);
+            return Err(Error::WrongCrc);
         }
 
         let product_number: u32 = (buf[0] as u32) << 24
@@ -281,7 +284,7 @@ impl TryFrom<[u8; 9]> for Measurement {
 
     fn try_from(buffer: [u8; 9]) -> Result<Self, Self::Error> {
         if validate(&buffer).is_err() {
-            return Err(Error::Crc);
+            return Err(Error::WrongCrc);
         }
 
         let dp_raw: i16 = (buffer[0] as i16) << 8 | buffer[1] as i16;

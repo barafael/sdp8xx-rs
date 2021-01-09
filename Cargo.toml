@@ -11,11 +11,16 @@ edition = "2018"
 
 [dependencies]
 embedded-hal = "0.2"
-sensirion-i2c = "0.1"
+
+[dependencies.sensirion-i2c]
+git = "https://github.com/barafael/sensirion-i2c-rs"
+branch = "master"
 
 [dev-dependencies]
 linux-embedded-hal = "0.3"
 embedded-hal-mock = "0.7"
 
 [profile.release]
-lto = true
+codegen-units = 1 # better optimizations
+debug = true # symbols are nice and they don't increase the size on Flash
+lto = true # better optimizations
