@@ -139,9 +139,8 @@ where
 
     /// Write an I2C command to the sensor.
     fn send_command(&mut self, command: Command) -> Result<(), Error<E>> {
-        self.i2c
-            .write(self.address, &command.as_bytes())
-            .map_err(Error::I2c)
+        let command: [u8; 2] = command.into();
+        self.i2c.write(self.address, &command).map_err(Error::I2c)
     }
 
     /// Return the product id of the SDP8xx
@@ -172,7 +171,8 @@ where
 
     /// Start sampling in continuous mode
     pub fn start_sampling_differential_pressure(
-        mut self, averaging: bool
+        mut self,
+        averaging: bool,
     ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState>, Error<E>> {
         let command = if averaging {
             Command::SampleDifferentialPressureAveraging
@@ -290,9 +290,8 @@ where
 
     /// Stop sampling continuous mode
     pub fn stop_sampling(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
-        self.i2c
-            .write(self.address, &Command::StopContinuousMeasurement.as_bytes())
-            .map_err(Error::I2c)?;
+        let bytes: [u8; 2] = Command::StopContinuousMeasurement.into();
+        self.i2c.write(self.address, &bytes).map_err(Error::I2c)?;
         Ok(Sdp8xx {
             i2c: self.i2c,
             address: self.address,
@@ -304,8 +303,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::io::ErrorKind;
     use hal::MockError;
+    use std::io::ErrorKind;
 
     use embedded_hal_mock as hal;
 
@@ -320,9 +319,11 @@ mod tests {
             0x03, 0x02, 206, 0x02, 0x01, 105, 0x44, 0x55, 0x00, 0x66, 0x77, 225, 0x88, 0x99, 0x24,
             0xaa, 0xbb, 0xC5,
         ];
+        let bytes_0: [u8; 2] = Command::ReadProductId0.into();
+        let bytes_1: [u8; 2] = Command::ReadProductId1.into();
         let expectations = [
-            Transaction::write(0x25, Command::ReadProductId0.as_bytes()[..].into()),
-            Transaction::write(0x25, Command::ReadProductId1.as_bytes()[..].into()),
+            Transaction::write(0x25, bytes_0.into()),
+            Transaction::write(0x25, bytes_1.into()),
             Transaction::read(0x25, data.clone()),
         ];
         //println!("{:x}", crc8::calculate(&data[15..17]));
@@ -340,8 +341,9 @@ mod tests {
     /// Test the sleep function
     #[test]
     fn test_go_to_sleep() {
+        let bytes: [u8; 2] = Command::EnterSleepMode.into();
         let expectations = [
-            Transaction::write(0x25, Command::EnterSleepMode.as_bytes()[..].into()),
+            Transaction::write(0x25, bytes.into()),
             Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
             Transaction::write(0x25, vec![]),
         ];
@@ -355,8 +357,9 @@ mod tests {
     /// Test waking up from sleep by polling
     #[test]
     fn test_wakeup_by_polling() {
+        let bytes: [u8; 2] = Command::EnterSleepMode.into();
         let expectations = [
-            Transaction::write(0x25, Command::EnterSleepMode.as_bytes()[..].into()),
+            Transaction::write(0x25, bytes.into()),
             Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
             Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
             Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),

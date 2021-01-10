@@ -1,5 +1,7 @@
 //! I2C commands for SDP8xx differential pressure sensor
 
+use core::convert::From;
+
 /// I2C commands sent to the sensor.
 /// Missing commands: General call reset, exit sleep mode
 #[derive(Debug, Copy, Clone)]
@@ -30,9 +32,9 @@ pub(crate) enum Command {
     ReadProductId1,
 }
 
-impl Command {
-    pub(crate) fn as_bytes(self) -> [u8; 2] {
-        match self {
+impl From<Command> for [u8; 2] {
+    fn from(val: Command) -> Self {
+        match val {
             Command::TriggerMassFlowRead => [0x36, 0x24],
             Command::TriggerMassFlowReadSync => [0x37, 0x26],
             Command::TriggerDifferentialPressureRead => [0x36, 0x2F],
