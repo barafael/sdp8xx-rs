@@ -17,11 +17,11 @@ pub(crate) enum Command {
     /// Continuous Mass Flow Sampling with Average till read
     SampleMassFlowAveraging,
     /// Continuous Mass Flow Sampling with no averaging
-    SampleMassFlowAveragingRaw,
+    SampleMassFlowRaw,
     /// Continuous Differential Pressure Sampling with Average till read
     SampleDifferentialPressureAveraging,
     /// Continuous Differential Pressure Sampling with no averaging
-    SampleDifferentialPressureAveragingRaw,
+    SampleDifferentialPressureRaw,
     /// Stop continuous measurement
     StopContinuousMeasurement,
     /// Enter sleep mode
@@ -40,9 +40,9 @@ impl From<Command> for [u8; 2] {
             Command::TriggerDifferentialPressureRead => [0x36, 0x2F],
             Command::TriggerDifferentialPressureReadSync => [0x37, 0x2D],
             Command::SampleMassFlowAveraging => [0x36, 0x03],
-            Command::SampleMassFlowAveragingRaw => [0x36, 0x08],
+            Command::SampleMassFlowRaw => [0x36, 0x08],
             Command::SampleDifferentialPressureAveraging => [0x36, 0x15],
-            Command::SampleDifferentialPressureAveragingRaw => [0x36, 0x1E],
+            Command::SampleDifferentialPressureRaw => [0x36, 0x1E],
             Command::StopContinuousMeasurement => [0x3F, 0xF9],
             Command::EnterSleepMode => [0x36, 0x77],
             Command::ReadProductId0 => [0x36, 0x7C],

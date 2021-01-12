@@ -86,6 +86,8 @@ pub enum Error<E> {
     WakeUpWhileNotSleeping,
     /// Cannot wake up sensor
     CannotWakeUp,
+    /// Invalid scale factor
+    InvalidScaleFactor,
 }
 
 impl<E, I2cWrite, I2cRead> From<i2c::Error<I2cWrite, I2cRead>> for Error<E>
@@ -157,10 +159,24 @@ where
 
     /// Trigger a differential pressure read without clock stretching.
     /// This function blocks for at least 60 milliseconds to await a result.
-    pub fn read_sample_triggered(&mut self) -> Result<Sample, Error<E>> {
+    pub fn trigger_differential_pressure_sample(&mut self) -> Result<Sample, Error<E>> {
         let mut buffer = [0; 9];
 
         self.send_command(Command::TriggerDifferentialPressureRead)?;
+
+        self.delay.delay_ms(60);
+
+        read_words_with_crc(&mut self.i2c, self.address, &mut buffer)?;
+
+        Sample::try_from(buffer).map_err(|_| Error::WrongCrc)
+    }
+
+    /// Trigger a mass flow read without clock stretching.
+    /// This function blocks for at least 60 milliseconds to await a result.
+    pub fn trigger_mass_flow_sample(&mut self) -> Result<Sample, Error<E>> {
+        let mut buffer = [0; 9];
+
+        self.send_command(Command::TriggerMassFlowRead)?;
 
         self.delay.delay_ms(60);
 
@@ -173,18 +189,40 @@ where
     pub fn start_sampling_differential_pressure(
         mut self,
         averaging: bool,
-    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState>, Error<E>> {
+    ) -> Result<
+        Sdp8xx<I2C, D, ContinuousSamplingState<ContinuousDifferentialPressureSampling>>,
+        Error<E>,
+    > {
         let command = if averaging {
             Command::SampleDifferentialPressureAveraging
         } else {
-            Command::SampleDifferentialPressureAveragingRaw
+            Command::SampleDifferentialPressureRaw
         };
         self.send_command(command)?;
         Ok(Sdp8xx {
             i2c: self.i2c,
             address: self.address,
             delay: self.delay,
-            state: PhantomData::<ContinuousSamplingState>,
+            state: PhantomData::<ContinuousSamplingState<ContinuousDifferentialPressureSampling>>,
+        })
+    }
+
+    /// Start sampling mass flow mode
+    pub fn start_sampling_mass_flow(
+        mut self,
+        averaging: bool,
+    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState<ContinuousMassFlowSampling>>, Error<E>> {
+        let command = if averaging {
+            Command::SampleMassFlowAveraging
+        } else {
+            Command::SampleMassFlowRaw
+        };
+        self.send_command(command)?;
+        Ok(Sdp8xx {
+            i2c: self.i2c,
+            address: self.address,
+            delay: self.delay,
+            state: PhantomData::<ContinuousSamplingState<ContinuousMassFlowSampling>>,
         })
     }
 
@@ -268,7 +306,7 @@ where
     }
 }
 
-impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState>
+impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState<ContinuousDifferentialPressureSampling>>
 where
     I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
     D: DelayUs<u16> + DelayMs<u16>,
@@ -280,11 +318,42 @@ where
         self.i2c
             .read(self.address, &mut buffer)
             .map_err(Error::I2c)?;
-        let sample = Sample::try_from(buffer);
-        if sample.is_err() {
-            return Err(Error::WrongBufferSize);
-        } else {
-            return Ok(sample.unwrap());
+        // TODO improve error handling
+        match Sample::try_from(buffer) {
+            Ok(s) => Ok(s),
+            Err(_) => Err(Error::InvalidScaleFactor),
+        }
+    }
+
+    /// Stop sampling continuous mode
+    pub fn stop_sampling(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
+        let bytes: [u8; 2] = Command::StopContinuousMeasurement.into();
+        self.i2c.write(self.address, &bytes).map_err(Error::I2c)?;
+        Ok(Sdp8xx {
+            i2c: self.i2c,
+            address: self.address,
+            delay: self.delay,
+            state: PhantomData::<IdleState>,
+        })
+    }
+}
+
+impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState<ContinuousMassFlowSampling>>
+where
+    I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
+    D: DelayUs<u16> + DelayMs<u16>,
+{
+    /// Read a sample in continuous mode
+    pub fn read_continuous_sample(&mut self) -> Result<Sample, Error<E>> {
+        let mut buffer = [0u8; 9];
+        // TODO rate limiting no faster than 0.5ms
+        self.i2c
+            .read(self.address, &mut buffer)
+            .map_err(Error::I2c)?;
+        // TODO improve error handling
+        match Sample::try_from(buffer) {
+            Ok(s) => Ok(s),
+            Err(_) => Err(Error::InvalidScaleFactor),
         }
     }
 

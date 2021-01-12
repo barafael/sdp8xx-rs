@@ -13,13 +13,15 @@ The Sensirion SDP800 is a differential pressure sensor. It has an I²C interface
 
 - [x] Get product identifier
 - [x] Get differential pressure (triggered sample)
-- [ ] Get mass flow (triggered sample)
+- [x] Get mass flow (triggered sample)
 - [x] Stop sampling continuous measurement
 - [x] Continuously sample differential pressure
-- [ ] Continuously sample mass flow
+- [x] Continuously sample mass flow
 - [x] Value conversion
 - [x] Type-state based initialization and mode selection (triggered and continuous mode, idle mode)
 - [ ] Polling and timeouts for states instead of delay-based implementation
+- [ ] Soft reset
+- [ ] Sample pressure/mass flow only in sampling state, use saved values for conversion factor and temperature
 
 ## License
 
