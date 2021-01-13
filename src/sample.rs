@@ -10,7 +10,7 @@ const TEMPERATURE_SCALE_FACTOR: f32 = 200.0f32;
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Error {
     /// Wrong CRC
-    WrongCrc,
+    CrcError,
     /// Invalid scale factor
     InvalidScaleFactor,
     /// Wrong Buffer Size
@@ -20,8 +20,7 @@ pub enum Error {
 impl From<crc8::Error> for Error {
     fn from(val: crc8::Error) -> Self {
         match val {
-            crc8::Error::WrongBufferSize => Error::WrongBufferSize,
-            crc8::Error::WrongCrc => Error::WrongCrc,
+            crc8::Error::CrcError => Error::CrcError,
         }
     }
 }

@@ -99,8 +99,7 @@ where
 {
     fn from(err: i2c::Error<I2cWrite, I2cRead>) -> Self {
         match err {
-            i2c::Error::WrongCrc => Error::WrongCrc,
-            i2c::Error::WrongBufferSize => Error::WrongBufferSize,
+            i2c::Error::Crc => Error::WrongCrc,
             i2c::Error::I2cWrite(e) => Error::I2c(e),
             i2c::Error::I2cRead(e) => Error::I2c(e),
         }

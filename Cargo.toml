@@ -13,8 +13,8 @@ edition = "2018"
 embedded-hal = "0.2"
 
 [dependencies.sensirion-i2c]
-git = "https://github.com/barafael/sensirion-i2c-rs"
-branch = "master"
+git = "https://github.com/Sensirion/sensirion-i2c-rs"
+branch = "use-explicit-error-type"
 
 [dev-dependencies]
 linux-embedded-hal = "0.3"
