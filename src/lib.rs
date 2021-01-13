@@ -29,6 +29,8 @@
 //! # }
 //! ```
 //!
+//! See [sdp8xx-rpi-test](https://github.com/barafael/sdp8xx-rpi-test) for an example on the raspberry pi.
+//!
 //! ### Fetching Device Information
 //!
 //! You can fetch the product id of your sensor:
