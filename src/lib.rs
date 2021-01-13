@@ -409,6 +409,21 @@ mod tests {
         sdp.destroy().done();
     }
 
+    /// Test triggering a differential pressure sample
+    #[test]
+    fn test_trigger_differential_pressure_read() {
+        let bytes: [u8; 2] = Command::TriggerDifferentialPressureRead.into();
+        let data= vec![0, 1, 0xb0, 3, 4, 0x68, 6, 7, 0x4c];
+        let expectations = [
+            Transaction::write(0x10, bytes.into()),
+            Transaction::read(0x10, data.clone()),
+        ];
+        let mock = I2cMock::new(&expectations);
+        let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+        let _data = sdp.trigger_differential_pressure_sample().unwrap();
+        sdp.destroy().done();
+    }
+
     /// Test the sleep function
     #[test]
     fn test_go_to_sleep() {
