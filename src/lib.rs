@@ -81,7 +81,7 @@ pub enum Error<E> {
     /// CRC checksum validation failed
     WrongCrc,
     /// Wrong Buffer Size
-    WrongBufferSize,
+    InvalidBufferSize,
     /// Invalid sensor variant
     InvalidVariant,
     /// Wake up sent while sensor was not in sleep state
@@ -102,6 +102,7 @@ where
             i2c::Error::Crc => Error::WrongCrc,
             i2c::Error::I2cWrite(e) => Error::I2c(e),
             i2c::Error::I2cRead(e) => Error::I2c(e),
+            i2c::Error::InvalidBufferSize => Error::InvalidBufferSize,
         }
     }
 }
