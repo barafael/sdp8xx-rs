@@ -69,6 +69,7 @@ use i2c::read_words_with_crc;
 use crate::hal::blocking::delay::{DelayMs, DelayUs};
 use crate::hal::blocking::i2c::{Read, Write, WriteRead};
 use sensirion_i2c::i2c;
+use sensirion_i2c::i2c::I2CBuffer;
 
 pub mod states;
 use crate::states::*;
@@ -99,7 +100,7 @@ where
 {
     fn from(err: i2c::Error<I2cWrite, I2cRead>) -> Self {
         match err {
-            i2c::Error::Crc => Error::WrongCrc,
+            i2c::Error::CrcError => Error::WrongCrc,
             i2c::Error::I2cWrite(e) => Error::I2c(e),
             i2c::Error::I2cRead(e) => Error::I2c(e),
             i2c::Error::InvalidBufferSize => Error::InvalidBufferSize,
@@ -168,7 +169,8 @@ where
 
         self.delay.delay_ms(60);
 
-        read_words_with_crc(&mut self.i2c, self.address, &mut buffer)?;
+        let mut i2c_buffer = I2CBuffer::try_from(&mut buffer[..]).unwrap();
+        read_words_with_crc(&mut self.i2c, self.address, &mut i2c_buffer)?;
 
         Sample::try_from(buffer).map_err(|_| Error::WrongCrc)
     }
@@ -182,7 +184,8 @@ where
 
         self.delay.delay_ms(60);
 
-        read_words_with_crc(&mut self.i2c, self.address, &mut buffer)?;
+        let mut i2c_buffer = I2CBuffer::try_from(&mut buffer[..]).unwrap();
+        read_words_with_crc(&mut self.i2c, self.address, &mut i2c_buffer)?;
 
         Sample::try_from(buffer).map_err(|_| Error::WrongCrc)
     }

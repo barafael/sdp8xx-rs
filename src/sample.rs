@@ -2,7 +2,7 @@
 
 use core::convert::TryFrom;
 
-use sensirion_i2c::crc8::{self, *};
+use sensirion_i2c::{crc8::{self, *}, i2c::I2CBuffer};
 
 const TEMPERATURE_SCALE_FACTOR: f32 = 200.0f32;
 
@@ -37,8 +37,9 @@ pub struct Sample {
 impl TryFrom<[u8; 9]> for Sample {
     type Error = Error;
 
-    fn try_from(buffer: [u8; 9]) -> Result<Self, Self::Error> {
-        validate(&buffer)?;
+    fn try_from(mut buffer: [u8; 9]) -> Result<Self, Self::Error> {
+        let i2c_buffer = I2CBuffer::try_from(&mut buffer[..]).unwrap();
+        validate(&i2c_buffer)?;
 
         let dp_raw: i16 = (buffer[0] as i16) << 8 | buffer[1] as i16;
         let temp_raw: i16 = (buffer[3] as i16) << 8 | buffer[4] as i16;

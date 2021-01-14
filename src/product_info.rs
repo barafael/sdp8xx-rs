@@ -4,6 +4,7 @@ use core::convert::TryFrom;
 use core::convert::TryInto;
 
 use sensirion_i2c::crc8::{self, *};
+use sensirion_i2c::i2c::I2CBuffer;
 
 /// Product Identification Error
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -11,7 +12,7 @@ pub enum Error {
     /// Wrong buffer size
     WrongBufferSize,
     /// Wrong CRC
-    WrongCrc,
+    CrcError,
     /// Invalid variant
     InvalidVariant,
 }
@@ -19,7 +20,7 @@ pub enum Error {
 impl From<crc8::Error> for Error {
     fn from(val: crc8::Error) -> Self {
         match val {
-            crc8::Error::CrcError => Error::WrongCrc,
+            crc8::Error::CrcError => Error::CrcError,
         }
     }
 }
@@ -36,8 +37,9 @@ pub struct ProductIdentifier {
 impl TryFrom<[u8; 18]> for ProductIdentifier {
     type Error = Error;
 
-    fn try_from(buf: [u8; 18]) -> Result<Self, Self::Error> {
-        validate(&buf)?;
+    fn try_from(mut buf: [u8; 18]) -> Result<Self, Self::Error> {
+        let i2c_buffer = I2CBuffer::try_from(&mut buf[..]).unwrap();
+        validate(&i2c_buffer)?;
 
         let product_number = ((buf[0] as u32) << 24
             | (buf[1] as u32) << 16
