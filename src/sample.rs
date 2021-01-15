@@ -2,7 +2,10 @@
 
 use core::convert::TryFrom;
 
-use sensirion_i2c::{crc8::{self, *}, i2c::I2CBuffer};
+use sensirion_i2c::{
+    crc8::{self, *},
+    i2c::I2CBuffer,
+};
 
 const TEMPERATURE_SCALE_FACTOR: f32 = 200.0f32;
 

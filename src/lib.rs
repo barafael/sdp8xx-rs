@@ -241,21 +241,6 @@ where
             state: PhantomData::<SleepState>,
         })
     }
-
-    /// Test function
-    pub fn go_to_sleep_then_wake_up(&mut self) -> Result<u32, Error<E>> {
-        self.send_command(Command::EnterSleepMode)?;
-        self.delay.delay_ms(50u16);
-        let mut counter = 0;
-        let mut woke = false;
-        while !woke {
-            counter += 1;
-            if self.i2c.write(self.address, &[]).is_ok() {
-                woke = true;
-            }
-        }
-        Ok(counter)
-    }
 }
 
 impl<I2C, D, E> Sdp8xx<I2C, D, SleepState>
@@ -388,7 +373,7 @@ mod tests {
 
     /// Test the `product_id` function
     #[test]
-    fn test_product_id() {
+    fn product_id() {
         let data = vec![
             0x03, 0x02, 206, 0x02, 0x01, 105, 0x44, 0x55, 0x00, 0x66, 0x77, 225, 0x88, 0x99, 0x24,
             0xaa, 0xbb, 0xC5,
@@ -414,9 +399,9 @@ mod tests {
 
     /// Test triggering a differential pressure sample
     #[test]
-    fn test_trigger_differential_pressure_read() {
+    fn trigger_differential_pressure_read() {
         let bytes: [u8; 2] = Command::TriggerDifferentialPressureRead.into();
-        let data= vec![0, 1, 0xb0, 3, 4, 0x68, 6, 7, 0x4c];
+        let data = vec![0, 1, 0xb0, 3, 4, 0x68, 6, 7, 0x4c];
         let expectations = [
             Transaction::write(0x10, bytes.into()),
             Transaction::read(0x10, data.clone()),
@@ -427,9 +412,74 @@ mod tests {
         sdp.destroy().done();
     }
 
+    /// Test triggering a mass flow sample
+    #[test]
+    fn trigger_mass_flow_read() {
+        let bytes: [u8; 2] = Command::TriggerMassFlowRead.into();
+        let data = vec![3, 4, 0x68, 6, 7, 0x4c, 0, 1, 0xb0];
+        let expectations = [
+            Transaction::write(0x10, bytes.into()),
+            Transaction::read(0x10, data.clone()),
+        ];
+        let mock = I2cMock::new(&expectations);
+        let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+        let _data = sdp.trigger_mass_flow_sample().unwrap();
+        sdp.destroy().done();
+    }
+
+    /// Test sampling differential pressure
+    #[test]
+    fn sample_differential_pressure() {
+        let bytes: [u8; 2] = Command::SampleDifferentialPressureAveraging.into();
+        let stop: [u8; 2] = Command::StopContinuousMeasurement.into();
+
+        let data = vec![0, 1, 0xb0, 3, 4, 0x68, 6, 7, 0x4c];
+        let expectations = [
+            Transaction::write(0x10, bytes.into()),
+            Transaction::read(0x10, data.clone()),
+            Transaction::read(0x10, data.clone()),
+            Transaction::read(0x10, data.clone()),
+            Transaction::write(0x10, stop.into()),
+        ];
+        let mock = I2cMock::new(&expectations);
+        let sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+        let mut sampling = sdp.start_sampling_differential_pressure(true).unwrap();
+        let _data1 = sampling.read_continuous_sample().unwrap();
+        let _data2 = sampling.read_continuous_sample().unwrap();
+        let _data3 = sampling.read_continuous_sample().unwrap();
+
+        let sdp = sampling.stop_sampling().unwrap();
+        sdp.destroy().done();
+    }
+
+    /// Test sampling mass flow
+    #[test]
+    fn sample_mass_flow() {
+        let bytes: [u8; 2] = Command::SampleMassFlowAveraging.into();
+        let stop: [u8; 2] = Command::StopContinuousMeasurement.into();
+
+        let data = vec![0, 1, 0xb0, 3, 4, 0x68, 6, 7, 0x4c];
+        let expectations = [
+            Transaction::write(0x10, bytes.into()),
+            Transaction::read(0x10, data.clone()),
+            Transaction::read(0x10, data.clone()),
+            Transaction::read(0x10, data.clone()),
+            Transaction::write(0x10, stop.into()),
+        ];
+        let mock = I2cMock::new(&expectations);
+        let sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+        let mut sampling = sdp.start_sampling_mass_flow(true).unwrap();
+        let _data1 = sampling.read_continuous_sample().unwrap();
+        let _data2 = sampling.read_continuous_sample().unwrap();
+        let _data3 = sampling.read_continuous_sample().unwrap();
+
+        let sdp = sampling.stop_sampling().unwrap();
+        sdp.destroy().done();
+    }
+
     /// Test the sleep function
     #[test]
-    fn test_go_to_sleep() {
+    fn go_to_sleep() {
         let bytes: [u8; 2] = Command::EnterSleepMode.into();
         let expectations = [
             Transaction::write(0x25, bytes.into()),
@@ -445,7 +495,7 @@ mod tests {
 
     /// Test waking up from sleep by polling
     #[test]
-    fn test_wakeup_by_polling() {
+    fn wakeup_by_polling() {
         let bytes: [u8; 2] = Command::EnterSleepMode.into();
         let expectations = [
             Transaction::write(0x25, bytes.into()),
