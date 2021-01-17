@@ -1,6 +1,7 @@
 //! Sample type for SDP8xx differential pressure sensor
 
 use core::convert::TryFrom;
+use core::marker::PhantomData;
 
 use sensirion_i2c::{
     crc8::{self, *},
@@ -28,16 +29,24 @@ impl From<crc8::Error> for Error {
     }
 }
 
+/// Marker type for differential pressure
+pub struct DifferentialPressure;
+
+/// Marker type for mass flow
+pub struct MassFlow;
+
 /// A measurement result from the sensor.
 #[derive(Debug, PartialEq, Clone)]
-pub struct Sample {
+pub struct Sample<T> {
     /// Pressure in Pa
-    pub differential_pressure: f32,
+    pub value: f32,
     /// Temperature reading
     pub temperature: f32,
+    /// Sample data type
+    state: PhantomData<T>,
 }
 
-impl TryFrom<[u8; 9]> for Sample {
+impl<T> TryFrom<[u8; 9]> for Sample<T> {
     type Error = Error;
 
     fn try_from(mut buffer: [u8; 9]) -> Result<Self, Self::Error> {
@@ -52,12 +61,34 @@ impl TryFrom<[u8; 9]> for Sample {
             return Err(Error::InvalidScaleFactor);
         }
 
-        let differential_pressure = dp_raw as f32 / dp_scale as f32;
+        let value = dp_raw as f32 / dp_scale as f32;
         let temperature = temp_raw as f32 / TEMPERATURE_SCALE_FACTOR;
 
-        Ok(Sample {
-            differential_pressure,
+        Ok(Sample::<T> {
+            value,
             temperature,
+            state: PhantomData::<T>,
         })
+    }
+}
+
+impl<T> Sample<T> {
+    /// Get the temperature
+    pub fn get_temperature(&self) -> f32 {
+        self.temperature
+    }
+}
+
+impl Sample<MassFlow> {
+    /// Get mass flow reading
+    pub fn get_mass_flow(&self) -> f32 {
+        self.value
+    }
+}
+
+impl Sample<DifferentialPressure> {
+    /// Get differential pressure reading
+    pub fn get_differential_pressure(&self) -> f32 {
+        self.value
     }
 }

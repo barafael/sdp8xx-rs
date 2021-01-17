@@ -162,7 +162,7 @@ where
 
     /// Trigger a differential pressure read without clock stretching.
     /// This function blocks for at least 60 milliseconds to await a result.
-    pub fn trigger_differential_pressure_sample(&mut self) -> Result<Sample, Error<E>> {
+    pub fn trigger_differential_pressure_sample(&mut self) -> Result<Sample<DifferentialPressure>, Error<E>> {
         let mut buffer = [0; 9];
 
         self.send_command(Command::TriggerDifferentialPressureRead)?;
@@ -177,7 +177,7 @@ where
 
     /// Trigger a mass flow read without clock stretching.
     /// This function blocks for at least 60 milliseconds to await a result.
-    pub fn trigger_mass_flow_sample(&mut self) -> Result<Sample, Error<E>> {
+    pub fn trigger_mass_flow_sample(&mut self) -> Result<Sample<MassFlow>, Error<E>> {
         let mut buffer = [0; 9];
 
         self.send_command(Command::TriggerMassFlowRead)?;
@@ -195,7 +195,7 @@ where
         mut self,
         averaging: bool,
     ) -> Result<
-        Sdp8xx<I2C, D, ContinuousSamplingState<ContinuousDifferentialPressureSampling>>,
+        Sdp8xx<I2C, D, ContinuousSamplingState<DifferentialPressure>>,
         Error<E>,
     > {
         let command = if averaging {
@@ -208,7 +208,7 @@ where
             i2c: self.i2c,
             address: self.address,
             delay: self.delay,
-            state: PhantomData::<ContinuousSamplingState<ContinuousDifferentialPressureSampling>>,
+            state: PhantomData::<ContinuousSamplingState<DifferentialPressure>>,
         })
     }
 
@@ -216,7 +216,7 @@ where
     pub fn start_sampling_mass_flow(
         mut self,
         averaging: bool,
-    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState<ContinuousMassFlowSampling>>, Error<E>> {
+    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState<MassFlow>>, Error<E>> {
         let command = if averaging {
             Command::SampleMassFlowAveraging
         } else {
@@ -227,7 +227,7 @@ where
             i2c: self.i2c,
             address: self.address,
             delay: self.delay,
-            state: PhantomData::<ContinuousSamplingState<ContinuousMassFlowSampling>>,
+            state: PhantomData::<ContinuousSamplingState<MassFlow>>,
         })
     }
 
@@ -296,13 +296,13 @@ where
     }
 }
 
-impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState<ContinuousDifferentialPressureSampling>>
+impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState<DifferentialPressure>>
 where
     I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
     D: DelayUs<u16> + DelayMs<u16>,
 {
     /// Read a sample in continuous mode
-    pub fn read_continuous_sample(&mut self) -> Result<Sample, Error<E>> {
+    pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, Error<E>> {
         let mut buffer = [0u8; 9];
         // TODO rate limiting no faster than 0.5ms
         self.i2c
@@ -328,13 +328,13 @@ where
     }
 }
 
-impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState<ContinuousMassFlowSampling>>
+impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState<MassFlow>>
 where
     I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
     D: DelayUs<u16> + DelayMs<u16>,
 {
     /// Read a sample in continuous mode
-    pub fn read_continuous_sample(&mut self) -> Result<Sample, Error<E>> {
+    pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, Error<E>> {
         let mut buffer = [0u8; 9];
         // TODO rate limiting no faster than 0.5ms
         self.i2c

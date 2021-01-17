@@ -117,7 +117,7 @@ impl TryFrom<u32> for ProductVariant {
 
 impl ProductVariant {
     /// Get the conversion factor for differential pressure in 1/Pa
-    fn get_default_conversion_factor(&self) -> i16 {
+    pub fn get_default_conversion_factor(&self) -> i16 {
         match self {
             ProductVariant::Sdp800_500Pa { .. } => 60,
             ProductVariant::Sdp810_500Pa { .. } => 60,
@@ -129,7 +129,7 @@ impl ProductVariant {
     }
 
     /// Get the sensor default I2C address
-    fn get_default_i2c_address(&self) -> u8 {
+    pub fn get_default_i2c_address(&self) -> u8 {
         match self {
             ProductVariant::Sdp801_500Pa { .. } | ProductVariant::Sdp811_500Pa { .. } => 0x26,
             _ => 0x25,
