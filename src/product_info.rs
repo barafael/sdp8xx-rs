@@ -44,7 +44,7 @@ impl TryFrom<[u8; 18]> for ProductIdentifier {
         let product_number = ((buf[0] as u32) << 24
             | (buf[1] as u32) << 16
             | (buf[3] as u32) << 8
-            | (buf[4] as u32) << 0)
+            | (buf[4] as u32))
             .try_into()?;
 
         let serial_number: u64 = (buf[6] as u64) << 56
@@ -54,7 +54,7 @@ impl TryFrom<[u8; 18]> for ProductIdentifier {
             | (buf[12] as u64) << 24
             | (buf[13] as u64) << 16
             | (buf[15] as u64) << 8
-            | (buf[16] as u64) << 0;
+            | (buf[16] as u64);
 
         Ok(ProductIdentifier {
             serial_number,

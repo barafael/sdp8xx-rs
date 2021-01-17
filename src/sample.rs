@@ -92,3 +92,32 @@ impl Sample<DifferentialPressure> {
         self.value
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::marker::PhantomData;
+
+    use crate::{DifferentialPressure, MassFlow, Sample};
+
+    #[test]
+    fn get_mass_flow_temperature() {
+        let sample = Sample::<MassFlow> {
+            temperature: 31.0,
+            value: 1.0,
+            state: PhantomData::<MassFlow>,
+        };
+        assert_eq!(sample.get_temperature(), sample.temperature);
+        assert_eq!(sample.get_mass_flow(), sample.value);
+    }
+
+    #[test]
+    fn get_differential_pressure_temperature() {
+        let sample = Sample {
+            temperature: -14.0,
+            value: 10.0,
+            state: PhantomData::<DifferentialPressure>,
+        };
+        assert_eq!(sample.get_temperature(), sample.temperature);
+        assert_eq!(sample.get_differential_pressure(), sample.value);
+    }
+}

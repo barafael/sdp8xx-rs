@@ -162,7 +162,9 @@ where
 
     /// Trigger a differential pressure read without clock stretching.
     /// This function blocks for at least 60 milliseconds to await a result.
-    pub fn trigger_differential_pressure_sample(&mut self) -> Result<Sample<DifferentialPressure>, Error<E>> {
+    pub fn trigger_differential_pressure_sample(
+        &mut self,
+    ) -> Result<Sample<DifferentialPressure>, Error<E>> {
         let mut buffer = [0; 9];
 
         self.send_command(Command::TriggerDifferentialPressureRead)?;
@@ -194,10 +196,7 @@ where
     pub fn start_sampling_differential_pressure(
         mut self,
         averaging: bool,
-    ) -> Result<
-        Sdp8xx<I2C, D, ContinuousSamplingState<DifferentialPressure>>,
-        Error<E>,
-    > {
+    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState<DifferentialPressure>>, Error<E>> {
         let command = if averaging {
             Command::SampleDifferentialPressureAveraging
         } else {
@@ -254,9 +253,8 @@ where
         // TODO polling with timeout.
         // Send wake up signal (not acked)
         // TODO this does not work currently on the hardware, though the unit tests are fine.
-        match self.i2c.write(self.address, &[]) {
-            Ok(_) => return Err(Error::WakeUpWhileNotSleeping),
-            Err(_) => {}
+        if let Ok(_) = self.i2c.write(self.address, &[]) {
+            return Err(Error::WakeUpWhileNotSleeping)
         }
         self.delay.delay_ms(3);
         match self.i2c.write(self.address, &[]) {
@@ -277,9 +275,8 @@ where
         // TODO timeout
         // Send wake up signal (not acked)
         // TODO this does not work currently on the hardware, though the unit tests are fine.
-        match self.i2c.write(self.address, &[]) {
-            Ok(_) => return Err(Error::WakeUpWhileNotSleeping),
-            Err(_) => {}
+        if let Ok(_) = self.i2c.write(self.address, &[]) {
+            return Err(Error::WakeUpWhileNotSleeping)
         }
         loop {
             // timeout here
