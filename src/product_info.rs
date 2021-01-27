@@ -1,28 +1,10 @@
 //! Product Identification Types
 
-use core::convert::TryFrom;
-use core::convert::TryInto;
-
-use sensirion_i2c::crc8::{self, *};
-use sensirion_i2c::i2c::I2CBuffer;
-
 /// Product Identification Error
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Error {
-    /// Wrong buffer size
-    WrongBufferSize,
-    /// Wrong CRC
-    CrcError,
-    /// Invalid variant
-    InvalidVariant,
-}
-
-impl From<crc8::Error> for Error {
-    fn from(val: crc8::Error) -> Self {
-        match val {
-            crc8::Error::CrcError => Error::CrcError,
-        }
-    }
+    /// Unknown variant
+    UnknownVariant,
 }
 
 /// Product Identification as described in the datasheet (6.3.6 Read Product Identifier)
@@ -34,18 +16,13 @@ pub struct ProductIdentifier {
     pub product_number: ProductVariant,
 }
 
-impl TryFrom<[u8; 18]> for ProductIdentifier {
-    type Error = Error;
-
-    fn try_from(mut buf: [u8; 18]) -> Result<Self, Self::Error> {
-        let i2c_buffer = I2CBuffer::try_from(&mut buf[..]).unwrap();
-        validate(&i2c_buffer)?;
-
+impl From<[u8; 18]> for ProductIdentifier {
+    fn from(buf: [u8; 18]) -> Self {
         let product_number = ((buf[0] as u32) << 24
             | (buf[1] as u32) << 16
             | (buf[3] as u32) << 8
             | (buf[4] as u32))
-            .try_into()?;
+            .into();
 
         let serial_number: u64 = (buf[6] as u64) << 56
             | (buf[7] as u64) << 48
@@ -56,16 +33,18 @@ impl TryFrom<[u8; 18]> for ProductIdentifier {
             | (buf[15] as u64) << 8
             | (buf[16] as u64);
 
-        Ok(ProductIdentifier {
+        ProductIdentifier {
             serial_number,
             product_number,
-        })
+        }
     }
 }
 
 /// Product variant as listed in the datasheet
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ProductVariant {
+    /// Unknown product variant
+    Unknown,
     /// SDP800 500 Pascal range with manifold connection, I2C address 0x25
     Sdp800_500Pa {
         /// The chip revision number
@@ -98,41 +77,41 @@ pub enum ProductVariant {
     },
 }
 
-impl TryFrom<u32> for ProductVariant {
-    type Error = Error;
-
+impl From<u32> for ProductVariant {
     /// Parse the product variant. The last byte is the revision number and might change.
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
+    fn from(value: u32) -> Self {
         match value.to_be_bytes() {
-            [0x03, 0x02, 0x01, n] => Ok(ProductVariant::Sdp800_500Pa { revision: n }),
-            [0x03, 0x02, 0x0A, n] => Ok(ProductVariant::Sdp810_500Pa { revision: n }),
-            [0x03, 0x02, 0x04, n] => Ok(ProductVariant::Sdp801_500Pa { revision: n }),
-            [0x03, 0x02, 0x0D, n] => Ok(ProductVariant::Sdp811_500Pa { revision: n }),
-            [0x03, 0x02, 0x02, n] => Ok(ProductVariant::Sdp800_125Pa { revision: n }),
-            [0x03, 0x02, 0x0B, n] => Ok(ProductVariant::Sdp810_125Pa { revision: n }),
-            _ => Err(Error::InvalidVariant),
+            [0x03, 0x02, 0x01, n] => ProductVariant::Sdp800_500Pa { revision: n },
+            [0x03, 0x02, 0x0A, n] => ProductVariant::Sdp810_500Pa { revision: n },
+            [0x03, 0x02, 0x04, n] => ProductVariant::Sdp801_500Pa { revision: n },
+            [0x03, 0x02, 0x0D, n] => ProductVariant::Sdp811_500Pa { revision: n },
+            [0x03, 0x02, 0x02, n] => ProductVariant::Sdp800_125Pa { revision: n },
+            [0x03, 0x02, 0x0B, n] => ProductVariant::Sdp810_125Pa { revision: n },
+            _ => ProductVariant::Unknown,
         }
     }
 }
 
 impl ProductVariant {
     /// Get the conversion factor for differential pressure in 1/Pa
-    pub fn get_default_conversion_factor(&self) -> i16 {
+    pub fn get_default_conversion_factor(&self) -> Option<i16> {
         match self {
-            ProductVariant::Sdp800_500Pa { .. } => 60,
-            ProductVariant::Sdp810_500Pa { .. } => 60,
-            ProductVariant::Sdp801_500Pa { .. } => 60,
-            ProductVariant::Sdp811_500Pa { .. } => 60,
-            ProductVariant::Sdp800_125Pa { .. } => 240,
-            ProductVariant::Sdp810_125Pa { .. } => 240,
+            ProductVariant::Sdp800_500Pa { .. } => Some(60),
+            ProductVariant::Sdp810_500Pa { .. } => Some(60),
+            ProductVariant::Sdp801_500Pa { .. } => Some(60),
+            ProductVariant::Sdp811_500Pa { .. } => Some(60),
+            ProductVariant::Sdp800_125Pa { .. } => Some(240),
+            ProductVariant::Sdp810_125Pa { .. } => Some(240),
+            ProductVariant::Unknown => None,
         }
     }
 
     /// Get the sensor default I2C address
-    pub fn get_default_i2c_address(&self) -> u8 {
+    pub fn get_default_i2c_address(&self) -> Option<u8> {
         match self {
-            ProductVariant::Sdp801_500Pa { .. } | ProductVariant::Sdp811_500Pa { .. } => 0x26,
-            _ => 0x25,
+            ProductVariant::Sdp801_500Pa { .. } | ProductVariant::Sdp811_500Pa { .. } => Some(0x26),
+            ProductVariant::Unknown => None,
+            _ => Some(0x25),
         }
     }
 }
@@ -145,32 +124,38 @@ mod tests {
     #[test]
     fn test_default_i2c_address() {
         let data = [
-            0x03, 0x02, 206, 0x02, 0x01, 105, 0x44, 0x55, 0x00, 0x66, 0x77, 225, 0x88, 0x99, 0x24,
-            0xaa, 0xbb, 0xC5,
+            0x03, 0x02, 0x00, 0x02, 0x01, 0x00, 0x44, 0x55, 0x00, 0x66, 0x77, 0x00, 0x88, 0x99,
+            0x00, 0xaa, 0xbb, 0x00,
         ];
-        let product_id = ProductIdentifier::try_from(data).unwrap();
+        let product_id = ProductIdentifier::from(data);
         assert_eq!(
             ProductVariant::Sdp800_125Pa { revision: 0x01 },
             product_id.product_number
         );
-        assert_eq!(0x25, product_id.product_number.get_default_i2c_address());
+        assert_eq!(
+            0x25,
+            product_id.product_number.get_default_i2c_address().unwrap()
+        );
     }
 
     /// Test getting the default conversion factor
     #[test]
     fn test_default_conversion_factor() {
         let data = [
-            0x03, 0x02, 206, 0x02, 0x01, 105, 0x44, 0x55, 0x00, 0x66, 0x77, 225, 0x88, 0x99, 0x24,
-            0xaa, 0xbb, 0xC5,
+            0x03, 0x02, 0x00, 0x02, 0x01, 0x00, 0x44, 0x55, 0x00, 0x66, 0x77, 0x00, 0x88, 0x99,
+            0x00, 0xaa, 0xbb, 0x00,
         ];
-        let product_id = ProductIdentifier::try_from(data).unwrap();
+        let product_id = ProductIdentifier::from(data);
         assert_eq!(
             ProductVariant::Sdp800_125Pa { revision: 0x01 },
             product_id.product_number
         );
         assert_eq!(
             240,
-            product_id.product_number.get_default_conversion_factor()
+            product_id
+                .product_number
+                .get_default_conversion_factor()
+                .unwrap()
         );
     }
 }

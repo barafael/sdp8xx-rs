@@ -43,8 +43,11 @@
 //!
 //! let dev = I2cdev::new("/dev/i2c-1").unwrap();
 //! let mut sdp = Sdp8xx::new(dev, 0x25, Delay);
-//! let product_id: ProductIdentifier = sdp.read_product_id().unwrap();
-//!
+//! if let Ok(product_id) = sdp.read_product_id() {
+//!     println!("{:?}", product_id);
+//! } else {
+//!     eprintln!("Error during reading product ID.");
+//! }
 //! ```
 
 #![deny(unsafe_code)]
@@ -64,23 +67,23 @@ pub mod sample;
 pub use crate::sample::*;
 
 use embedded_hal as hal;
-use i2c::read_words_with_crc;
 
 use crate::hal::blocking::delay::{DelayMs, DelayUs};
 use crate::hal::blocking::i2c::{Read, Write, WriteRead};
-use sensirion_i2c::i2c;
-use sensirion_i2c::i2c::I2CBuffer;
+use sensirion_i2c::i2c_buffer::I2cBuffer;
 
 pub mod states;
 use crate::states::*;
 
 /// All possible errors in this crate
-#[derive(Debug)]
-pub enum Error<E> {
-    /// I2C bus error
-    I2c(E),
+#[derive(Debug, PartialEq)]
+pub enum SdpError<I2cWrite: Write, I2cRead: Read> {
+    /// I2C write error
+    I2cWrite(I2cWrite::Error),
+    /// I2C read error
+    I2cRead(I2cRead::Error),
     /// CRC checksum validation failed
-    WrongCrc,
+    CrcError,
     /// Wrong Buffer Size
     InvalidBufferSize,
     /// Invalid sensor variant
@@ -91,24 +94,28 @@ pub enum Error<E> {
     CannotWakeUp,
     /// Invalid scale factor
     InvalidScaleFactor,
+    /// Sampling error
+    SampleError,
+    /// Buffer too small for requested operation
+    BufferTooSmall,
 }
 
-impl<E, I2cWrite, I2cRead> From<i2c::Error<I2cWrite, I2cRead>> for Error<E>
-where
-    I2cWrite: Write<Error = E>,
-    I2cRead: Read<Error = E>,
+impl<I2cWrite: embedded_hal::blocking::i2c::Write, I2cRead: embedded_hal::blocking::i2c::Read>
+    From<sensirion_i2c::i2c::Error<I2cWrite, I2cRead>> for SdpError<I2cWrite, I2cRead>
 {
-    fn from(err: i2c::Error<I2cWrite, I2cRead>) -> Self {
-        match err {
-            i2c::Error::CrcError => Error::WrongCrc,
-            i2c::Error::I2cWrite(e) => Error::I2c(e),
-            i2c::Error::I2cRead(e) => Error::I2c(e),
-            i2c::Error::InvalidBufferSize => Error::InvalidBufferSize,
+    fn from(error: sensirion_i2c::i2c::Error<I2cWrite, I2cRead>) -> Self {
+        match error {
+            sensirion_i2c::i2c::Error::I2cWrite(w) => SdpError::I2cWrite(w),
+            sensirion_i2c::i2c::Error::I2cRead(r) => SdpError::I2cRead(r),
+            sensirion_i2c::i2c::Error::CrcError => SdpError::CrcError,
+            sensirion_i2c::i2c::Error::InvalidBufferSize => SdpError::InvalidBufferSize,
+            sensirion_i2c::i2c::Error::InvalidArgument => SdpError::InvalidBufferSize,
+            sensirion_i2c::i2c::Error::BufferTooSmall => SdpError::BufferTooSmall,
         }
     }
 }
 
-/// Driver for the SDP8xx
+/// State of the SDP8xx
 #[derive(Debug, Default)]
 pub struct Sdp8xx<I2C, D, State> {
     /// The concrete I2C device implementation.
@@ -143,60 +150,68 @@ where
     }
 
     /// Write an I2C command to the sensor.
-    fn send_command(&mut self, command: Command) -> Result<(), Error<E>> {
+    fn send_command(&mut self, command: Command) -> Result<(), SdpError<I2C, I2C>> {
         let command: [u8; 2] = command.into();
-        self.i2c.write(self.address, &command).map_err(Error::I2c)
+        self.i2c
+            .write(self.address, &command)
+            .map_err(SdpError::I2cWrite)
     }
 
     /// Return the product id of the SDP8xx
-    pub fn read_product_id(&mut self) -> Result<ProductIdentifier, Error<E>> {
+    pub fn read_product_id(&mut self) -> Result<ProductIdentifier, SdpError<I2C, I2C>> {
         let mut buf = [0; 18];
         // Request product id
         self.send_command(Command::ReadProductId0)?;
         self.send_command(Command::ReadProductId1)?;
 
-        self.i2c.read(self.address, &mut buf).map_err(Error::I2c)?;
+        self.i2c
+            .read(self.address, &mut buf)
+            .map_err(SdpError::I2cRead)?;
 
-        ProductIdentifier::try_from(buf).map_err(|_| Error::WrongCrc)
+        ProductIdentifier::try_from(buf).map_err(|_| SdpError::CrcError)
     }
 
     /// Trigger a differential pressure read without clock stretching.
     /// This function blocks for at least 60 milliseconds to await a result.
     pub fn trigger_differential_pressure_sample(
         &mut self,
-    ) -> Result<Sample<DifferentialPressure>, Error<E>> {
-        let mut buffer = [0; 9];
-
+    ) -> Result<Sample<DifferentialPressure>, SdpError<I2C, I2C>> {
         self.send_command(Command::TriggerDifferentialPressureRead)?;
 
         self.delay.delay_ms(60);
 
-        let mut i2c_buffer = I2CBuffer::try_from(&mut buffer[..]).unwrap();
-        read_words_with_crc(&mut self.i2c, self.address, &mut i2c_buffer)?;
+        let mut i2c_buffer = I2cBuffer::<9>::new();
 
-        Sample::try_from(buffer).map_err(|_| Error::WrongCrc)
+        i2c_buffer.read_and_validate::<I2C, I2C>(self.address, &mut self.i2c)?;
+
+        match Sample::<DifferentialPressure>::try_from(i2c_buffer) {
+            Ok(s) => Ok(s),
+            Err(_) => Err(SdpError::SampleError),
+        }
     }
 
     /// Trigger a mass flow read without clock stretching.
     /// This function blocks for at least 60 milliseconds to await a result.
-    pub fn trigger_mass_flow_sample(&mut self) -> Result<Sample<MassFlow>, Error<E>> {
-        let mut buffer = [0; 9];
-
+    pub fn trigger_mass_flow_sample(&mut self) -> Result<Sample<MassFlow>, SdpError<I2C, I2C>> {
         self.send_command(Command::TriggerMassFlowRead)?;
 
         self.delay.delay_ms(60);
 
-        let mut i2c_buffer = I2CBuffer::try_from(&mut buffer[..]).unwrap();
-        read_words_with_crc(&mut self.i2c, self.address, &mut i2c_buffer)?;
+        let mut i2c_buffer = I2cBuffer::<9>::new();
+        i2c_buffer.read_and_validate::<I2C, I2C>(self.address, &mut self.i2c)?;
 
-        Sample::try_from(buffer).map_err(|_| Error::WrongCrc)
+        match Sample::<MassFlow>::try_from(i2c_buffer) {
+            Ok(s) => Ok(s),
+            Err(_) => Err(SdpError::SampleError),
+        }
     }
 
     /// Start sampling in continuous mode
     pub fn start_sampling_differential_pressure(
         mut self,
         averaging: bool,
-    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState<DifferentialPressure>>, Error<E>> {
+    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState<DifferentialPressure>>, SdpError<I2C, I2C>>
+    {
         let command = if averaging {
             Command::SampleDifferentialPressureAveraging
         } else {
@@ -215,7 +230,7 @@ where
     pub fn start_sampling_mass_flow(
         mut self,
         averaging: bool,
-    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState<MassFlow>>, Error<E>> {
+    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState<MassFlow>>, SdpError<I2C, I2C>> {
         let command = if averaging {
             Command::SampleMassFlowAveraging
         } else {
@@ -231,7 +246,7 @@ where
     }
 
     /// Enter the SDP8xx sleep state
-    pub fn go_to_sleep(mut self) -> Result<Sdp8xx<I2C, D, SleepState>, Error<E>> {
+    pub fn go_to_sleep(mut self) -> Result<Sdp8xx<I2C, D, SleepState>, SdpError<I2C, I2C>> {
         self.send_command(Command::EnterSleepMode)?;
         Ok(Sdp8xx {
             i2c: self.i2c,
@@ -249,17 +264,17 @@ where
 {
     /// Wake the sensor up from the sleep state
     /// This function blocks for at least 2 milliseconds
-    pub fn wake_up(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
+    pub fn wake_up(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>> {
         // TODO polling with timeout.
         // Send wake up signal (not acked)
         // TODO this does not work currently on the hardware, though the unit tests are fine.
-        if let Ok(_) = self.i2c.write(self.address, &[]) {
-            return Err(Error::WakeUpWhileNotSleeping)
+        if self.i2c.write(self.address, &[]).is_ok() {
+            return Err(SdpError::WakeUpWhileNotSleeping);
         }
         self.delay.delay_ms(3);
         match self.i2c.write(self.address, &[]) {
             Ok(_) => {}
-            Err(_) => return Err(Error::CannotWakeUp),
+            Err(_) => return Err(SdpError::CannotWakeUp),
         }
         Ok(Sdp8xx {
             i2c: self.i2c,
@@ -271,12 +286,12 @@ where
 
     /// Wake the sensor up from the sleep state by polling the I2C bus
     /// This function blocks for at least 2 milliseconds
-    pub fn wake_up_poll(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
+    pub fn wake_up_poll(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>> {
         // TODO timeout
         // Send wake up signal (not acked)
         // TODO this does not work currently on the hardware, though the unit tests are fine.
-        if let Ok(_) = self.i2c.write(self.address, &[]) {
-            return Err(Error::WakeUpWhileNotSleeping)
+        if self.i2c.write(self.address, &[]).is_ok() {
+            return Err(SdpError::WakeUpWhileNotSleeping);
         }
         loop {
             // timeout here
@@ -299,23 +314,25 @@ where
     D: DelayUs<u16> + DelayMs<u16>,
 {
     /// Read a sample in continuous mode
-    pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, Error<E>> {
+    pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, SdpError<I2C, I2C>> {
         let mut buffer = [0u8; 9];
         // TODO rate limiting no faster than 0.5ms
         self.i2c
             .read(self.address, &mut buffer)
-            .map_err(Error::I2c)?;
+            .map_err(SdpError::I2cRead)?;
         // TODO improve error handling
         match Sample::try_from(buffer) {
             Ok(s) => Ok(s),
-            Err(_) => Err(Error::InvalidScaleFactor),
+            Err(_) => Err(SdpError::InvalidScaleFactor),
         }
     }
 
     /// Stop sampling continuous mode
-    pub fn stop_sampling(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
+    pub fn stop_sampling(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>> {
         let bytes: [u8; 2] = Command::StopContinuousMeasurement.into();
-        self.i2c.write(self.address, &bytes).map_err(Error::I2c)?;
+        self.i2c
+            .write(self.address, &bytes)
+            .map_err(SdpError::I2cWrite)?;
         Ok(Sdp8xx {
             i2c: self.i2c,
             address: self.address,
@@ -331,23 +348,25 @@ where
     D: DelayUs<u16> + DelayMs<u16>,
 {
     /// Read a sample in continuous mode
-    pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, Error<E>> {
+    pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, SdpError<I2C, I2C>> {
         let mut buffer = [0u8; 9];
         // TODO rate limiting no faster than 0.5ms
         self.i2c
             .read(self.address, &mut buffer)
-            .map_err(Error::I2c)?;
+            .map_err(SdpError::I2cRead)?;
         // TODO improve error handling
         match Sample::try_from(buffer) {
             Ok(s) => Ok(s),
-            Err(_) => Err(Error::InvalidScaleFactor),
+            Err(_) => Err(SdpError::InvalidScaleFactor),
         }
     }
 
     /// Stop sampling continuous mode
-    pub fn stop_sampling(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, Error<E>> {
+    pub fn stop_sampling(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>> {
         let bytes: [u8; 2] = Command::StopContinuousMeasurement.into();
-        self.i2c.write(self.address, &bytes).map_err(Error::I2c)?;
+        self.i2c
+            .write(self.address, &bytes)
+            .map_err(SdpError::I2cWrite)?;
         Ok(Sdp8xx {
             i2c: self.i2c,
             address: self.address,

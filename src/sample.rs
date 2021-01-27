@@ -3,30 +3,15 @@
 use core::convert::TryFrom;
 use core::marker::PhantomData;
 
-use sensirion_i2c::{
-    crc8::{self, *},
-    i2c::I2CBuffer,
-};
+use sensirion_i2c::i2c_buffer::I2cBuffer;
 
 const TEMPERATURE_SCALE_FACTOR: f32 = 200.0f32;
 
 /// Product Identification Error
 #[derive(Debug, PartialEq, Copy, Clone)]
-pub enum Error {
-    /// Wrong CRC
-    CrcError,
+pub enum SampleError {
     /// Invalid scale factor
     InvalidScaleFactor,
-    /// Wrong Buffer Size
-    WrongBufferSize,
-}
-
-impl From<crc8::Error> for Error {
-    fn from(val: crc8::Error) -> Self {
-        match val {
-            crc8::Error::CrcError => Error::CrcError,
-        }
-    }
 }
 
 /// Marker type for differential pressure
@@ -46,19 +31,39 @@ pub struct Sample<T> {
     state: PhantomData<T>,
 }
 
+impl<T> TryFrom<I2cBuffer<9>> for Sample<T> {
+    type Error = SampleError;
+
+    fn try_from(buffer: I2cBuffer<9>) -> Result<Self, Self::Error> {
+        let dp_raw: i16 = (*buffer.get(0).unwrap() as i16) << 8 | *buffer.get(1).unwrap() as i16;
+        let temp_raw: i16 = (*buffer.get(3).unwrap() as i16) << 8 | *buffer.get(4).unwrap() as i16;
+        let dp_scale: i16 = (*buffer.get(6).unwrap() as i16) << 8 | *buffer.get(7).unwrap() as i16;
+
+        if dp_scale == 0 {
+            return Err(SampleError::InvalidScaleFactor);
+        }
+
+        let value = dp_raw as f32 / dp_scale as f32;
+        let temperature = temp_raw as f32 / TEMPERATURE_SCALE_FACTOR;
+
+        Ok(Sample::<T> {
+            value,
+            temperature,
+            state: PhantomData::<T>,
+        })
+    }
+}
+
 impl<T> TryFrom<[u8; 9]> for Sample<T> {
-    type Error = Error;
+    type Error = SampleError;
 
-    fn try_from(mut buffer: [u8; 9]) -> Result<Self, Self::Error> {
-        let i2c_buffer = I2CBuffer::try_from(&mut buffer[..]).unwrap();
-        validate(&i2c_buffer)?;
-
+    fn try_from(buffer: [u8; 9]) -> Result<Self, Self::Error> {
         let dp_raw: i16 = (buffer[0] as i16) << 8 | buffer[1] as i16;
         let temp_raw: i16 = (buffer[3] as i16) << 8 | buffer[4] as i16;
         let dp_scale: i16 = (buffer[6] as i16) << 8 | buffer[7] as i16;
 
         if dp_scale == 0 {
-            return Err(Error::InvalidScaleFactor);
+            return Err(SampleError::InvalidScaleFactor);
         }
 
         let value = dp_raw as f32 / dp_scale as f32;
