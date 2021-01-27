@@ -501,6 +501,7 @@ mod tests {
         let bytes: [u8; 2] = Command::EnterSleepMode.into();
         let expectations = [
             Transaction::write(0x25, bytes.into()),
+            /* dummy */ Transaction::write(0x25, vec![]),
             Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
             Transaction::write(0x25, vec![]),
         ];
