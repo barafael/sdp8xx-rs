@@ -268,6 +268,8 @@ where
         // TODO polling with timeout.
         // Send wake up signal (not acked)
         // TODO this does not work currently on the hardware, though the unit tests are fine.
+        let _ = self.i2c.write(self.address, &[]);
+        self.delay.delay_ms(3);
         if self.i2c.write(self.address, &[]).is_ok() {
             return Err(SdpError::WakeUpWhileNotSleeping);
         }
