@@ -15,9 +15,11 @@ pub enum SampleError {
 }
 
 /// Marker type for differential pressure
+#[derive(Debug)]
 pub struct DifferentialPressure;
 
 /// Marker type for mass flow
+#[derive(Debug)]
 pub struct MassFlow;
 
 /// A measurement result from the sensor.
