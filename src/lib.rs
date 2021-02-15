@@ -109,7 +109,6 @@ impl<I2cWrite: embedded_hal::blocking::i2c::Write, I2cRead: embedded_hal::blocki
             sensirion_i2c::i2c::Error::I2cRead(r) => SdpError::I2cRead(r),
             sensirion_i2c::i2c::Error::CrcError => SdpError::CrcError,
             sensirion_i2c::i2c::Error::InvalidBufferSize => SdpError::InvalidBufferSize,
-            sensirion_i2c::i2c::Error::InvalidArgument => SdpError::InvalidBufferSize,
             sensirion_i2c::i2c::Error::BufferTooSmall => SdpError::BufferTooSmall,
         }
     }
