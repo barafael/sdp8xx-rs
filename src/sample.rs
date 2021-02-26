@@ -25,7 +25,7 @@ pub struct MassFlow;
 /// A measurement result from the sensor.
 #[derive(Debug, Default, Copy, Clone, PartialEq)]
 pub struct Sample<T> {
-    /// Pressure in Pa
+    /// Value (unit depends on state)
     pub value: f32,
     /// Temperature reading
     pub temperature: f32,
@@ -102,9 +102,14 @@ impl Sample<DifferentialPressure> {
 
 #[cfg(test)]
 mod tests {
-    use std::marker::PhantomData;
+    use std::{convert::TryFrom, marker::PhantomData};
 
-    use crate::{DifferentialPressure, MassFlow, Sample};
+    use sensirion_i2c::{
+        crc8,
+        i2c_buffer::{Appendable, I2cBuffer},
+    };
+
+    use crate::{DifferentialPressure, MassFlow, Sample, SampleError};
 
     #[test]
     fn get_mass_flow_temperature() {
@@ -126,5 +131,38 @@ mod tests {
         };
         assert_eq!(sample.get_temperature(), sample.temperature);
         assert_eq!(sample.get_differential_pressure(), sample.value);
+    }
+
+    #[test]
+    fn try_from_bytes_valid() {
+        let mut data = [1, 2, 0, 30, 5, 0, 7, 8, 0];
+        data[2] = crc8::calculate(&data[0..2]);
+        data[5] = crc8::calculate(&data[3..5]);
+        data[8] = crc8::calculate(&data[6..8]);
+
+        assert!(Sample::<DifferentialPressure>::try_from(data).is_ok());
+        assert!(Sample::<MassFlow>::try_from(data).is_ok());
+    }
+
+    #[test]
+    fn try_from_bytes_invalid() {
+        let mut data = [1, 2, 0, 30, 5, 0, 0, 0, 0];
+        data[2] = crc8::calculate(&data[0..2]);
+        data[5] = crc8::calculate(&data[3..5]);
+        data[8] = crc8::calculate(&data[6..8]);
+
+        let error = Sample::<MassFlow>::try_from(data);
+        assert!(error.is_err());
+        assert_eq!(SampleError::InvalidScaleFactor, error.unwrap_err());
+    }
+
+    #[test]
+    fn try_from_buffer_invalid() {
+        let data: [u16; 3] = [12, 305, 0];
+        let mut buffer = I2cBuffer::<9>::new();
+        buffer.append(&data[..]).unwrap();
+        let error = Sample::<DifferentialPressure>::try_from(buffer);
+        assert!(error.is_err());
+        assert_eq!(SampleError::InvalidScaleFactor, error.unwrap_err());
     }
 }

@@ -49,6 +49,24 @@
 //!     eprintln!("Error during reading product ID.");
 //! }
 //! ```
+//!
+//! ### Fetching Some Data
+//!
+//! You can fetch the differential pressure:
+//!
+//! ```no_run
+//! use linux_embedded_hal as hal;
+//! use hal::{Delay, I2cdev};
+//! use sdp8xx::Sdp8xx;
+//!
+//! let dev = I2cdev::new("/dev/i2c-1").unwrap();
+//! let mut sdp = Sdp8xx::new(dev, 0x25, Delay);
+//!
+//! let data = match sdp.trigger_differential_pressure_sample() {
+//!     Ok(d) => dbg!(d),
+//!     Err(_) => panic!(),
+//! };
+//! ```
 
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
@@ -92,8 +110,6 @@ pub enum SdpError<I2cWrite: Write, I2cRead: Read> {
     WakeUpWhileNotSleeping,
     /// Cannot wake up sensor
     CannotWakeUp,
-    /// Invalid scale factor
-    InvalidScaleFactor,
     /// Sampling error
     SampleError,
     /// Buffer too small for requested operation
@@ -134,7 +150,6 @@ where
 {
     /// Create a new instance of the SDP8xx driver.
     pub fn new(i2c: I2C, address: u8, delay: D) -> Self {
-        // TODO try to communicate and get parameters from chip
         Sdp8xx {
             i2c,
             address,
@@ -183,10 +198,7 @@ where
 
         i2c_buffer.read_and_validate::<I2C, I2C>(self.address, &mut self.i2c)?;
 
-        match Sample::<DifferentialPressure>::try_from(i2c_buffer) {
-            Ok(s) => Ok(s),
-            Err(_) => Err(SdpError::SampleError),
-        }
+        Sample::<DifferentialPressure>::try_from(i2c_buffer).map_err(|_| SdpError::SampleError)
     }
 
     /// Trigger a mass flow read without clock stretching.
@@ -199,10 +211,34 @@ where
         let mut i2c_buffer = I2cBuffer::<9>::new();
         i2c_buffer.read_and_validate::<I2C, I2C>(self.address, &mut self.i2c)?;
 
-        match Sample::<MassFlow>::try_from(i2c_buffer) {
-            Ok(s) => Ok(s),
-            Err(_) => Err(SdpError::SampleError),
-        }
+        Sample::<MassFlow>::try_from(i2c_buffer).map_err(|_| SdpError::SampleError)
+    }
+
+    /// Trigger a differential pressure read with clock stretching.
+    /// This function blocks until the data becomes available (if clock stretching is supported).
+    pub fn trigger_differential_pressure_sample_sync(
+        &mut self,
+    ) -> Result<Sample<DifferentialPressure>, SdpError<I2C, I2C>> {
+        self.send_command(Command::TriggerDifferentialPressureReadSync)?;
+
+        let mut i2c_buffer = I2cBuffer::<9>::new();
+
+        i2c_buffer.read_and_validate::<I2C, I2C>(self.address, &mut self.i2c)?;
+
+        Sample::<DifferentialPressure>::try_from(i2c_buffer).map_err(|_| SdpError::SampleError)
+    }
+
+    /// Trigger a mass flow read with clock stretching.
+    /// This function blocks until the data becomes available (if clock stretching is supported).
+    pub fn trigger_mass_flow_sample_sync(
+        &mut self,
+    ) -> Result<Sample<MassFlow>, SdpError<I2C, I2C>> {
+        self.send_command(Command::TriggerMassFlowReadSync)?;
+
+        let mut i2c_buffer = I2cBuffer::<9>::new();
+        i2c_buffer.read_and_validate::<I2C, I2C>(self.address, &mut self.i2c)?;
+
+        Sample::<MassFlow>::try_from(i2c_buffer).map_err(|_| SdpError::SampleError)
     }
 
     /// Start sampling in continuous mode
@@ -266,7 +302,6 @@ where
     pub fn wake_up(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>> {
         // TODO polling with timeout.
         // Send wake up signal (not acked)
-        // TODO this does not work currently on the hardware, though the unit tests are fine.
         let _ = self.i2c.write(self.address, &[]);
         self.delay.delay_ms(3);
         if self.i2c.write(self.address, &[]).is_ok() {
@@ -288,14 +323,12 @@ where
     /// Wake the sensor up from the sleep state by polling the I2C bus
     /// This function blocks for at least 2 milliseconds
     pub fn wake_up_poll(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>> {
-        // TODO timeout
         // Send wake up signal (not acked)
-        // TODO this does not work currently on the hardware, though the unit tests are fine.
         if self.i2c.write(self.address, &[]).is_ok() {
             return Err(SdpError::WakeUpWhileNotSleeping);
         }
         loop {
-            // timeout here
+            // TODO timeout
             if self.i2c.write(self.address, &[]).is_ok() {
                 break;
             }
@@ -321,11 +354,7 @@ where
         self.i2c
             .read(self.address, &mut buffer)
             .map_err(SdpError::I2cRead)?;
-        // TODO improve error handling
-        match Sample::try_from(buffer) {
-            Ok(s) => Ok(s),
-            Err(_) => Err(SdpError::InvalidScaleFactor),
-        }
+        Sample::try_from(buffer).map_err(|_| SdpError::SampleError)
     }
 
     /// Stop sampling continuous mode
@@ -355,11 +384,7 @@ where
         self.i2c
             .read(self.address, &mut buffer)
             .map_err(SdpError::I2cRead)?;
-        // TODO improve error handling
-        match Sample::try_from(buffer) {
-            Ok(s) => Ok(s),
-            Err(_) => Err(SdpError::InvalidScaleFactor),
-        }
+        Sample::try_from(buffer).map_err(|_| SdpError::SampleError)
     }
 
     /// Stop sampling continuous mode
@@ -441,6 +466,36 @@ mod tests {
         let mock = I2cMock::new(&expectations);
         let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
         let _data = sdp.trigger_mass_flow_sample().unwrap();
+        sdp.destroy().done();
+    }
+
+    /// Test triggering a differential pressure sample with clock stretching
+    #[test]
+    fn trigger_differential_pressure_read_sync() {
+        let bytes: [u8; 2] = Command::TriggerDifferentialPressureReadSync.into();
+        let data = vec![0, 1, 0xb0, 3, 4, 0x68, 6, 7, 0x4c];
+        let expectations = [
+            Transaction::write(0x10, bytes.into()),
+            Transaction::read(0x10, data.clone()),
+        ];
+        let mock = I2cMock::new(&expectations);
+        let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+        let _data = sdp.trigger_differential_pressure_sample_sync().unwrap();
+        sdp.destroy().done();
+    }
+
+    /// Test triggering a mass flow sample with clock stretching
+    #[test]
+    fn trigger_mass_flow_read_sync() {
+        let bytes: [u8; 2] = Command::TriggerMassFlowReadSync.into();
+        let data = vec![3, 4, 0x68, 6, 7, 0x4c, 0, 1, 0xb0];
+        let expectations = [
+            Transaction::write(0x10, bytes.into()),
+            Transaction::read(0x10, data.clone()),
+        ];
+        let mock = I2cMock::new(&expectations);
+        let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+        let _data = sdp.trigger_mass_flow_sample_sync().unwrap();
         sdp.destroy().done();
     }
 
