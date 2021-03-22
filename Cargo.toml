@@ -6,7 +6,7 @@ license = "MIT"
 description = "Platform agnostic Rust driver for the Sensirion SDP8xx differential pressure sensor."
 readme = "README.md"
 keywords = ["sdp8xx", "sensirion", "driver", "embedded-hal-driver"]
-repository = "https://github.com/barafael/sdp8xx"
+repository = "https://github.com/barafael/sdp8xx-rs"
 categories = ["embedded", "hardware-support", "no-std"]
 edition = "2018"
 
