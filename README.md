@@ -2,8 +2,6 @@
 
 ![No Std][no-std-badge]
 [![Build status][workflow-badge]][workflow]
-[![Crates.io Version][crates-io-badge]][crates-io]
-[![Crates.io Downloads][crates-io-download-badge]][crates-io-download]
 
 This is a platform agnostic Rust driver for the Sensirion SDP800 differential pressure sensor.
 using the [`embedded-hal`](https://github.com/japaric/embedded-hal) traits.
@@ -33,7 +31,6 @@ Licensed under
  * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 <!-- Badges -->
-[workflow]: https://github.com/barafael/sdp8xx-rs/actions?query=workflow%3ARust
-[workflow-badge]: https://img.shields.io/github/workflow/status/barafael/sdp8xx-rs/Rust/master
-[crates-io]: https://crates.io/crates/sdp8xx
+[workflow]: https://github.com/barafael/sdp8xx-rs/actions?query=workflow%3Abuild
+[workflow-badge]: https://img.shields.io/github/workflow/status/barafael/sdp8xx-rs/build/main
 [no-std-badge]: https://img.shields.io/badge/no__std-yes-blue
