@@ -621,4 +621,30 @@ mod tests {
         let sdp = sleeping.wake_up_poll().unwrap();
         sdp.destroy().done();
     }
+
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn fuzz_differential_pressure_sampling(mut bytes in prop::collection::vec(0..255u8, 9)) {
+            bytes[2] = sensirion_i2c::crc8::calculate(&bytes[0..2]);
+            bytes[5] = sensirion_i2c::crc8::calculate(&bytes[3..5]);
+            bytes[8] = sensirion_i2c::crc8::calculate(&bytes[6..8]);
+            let command: [u8; 2] = Command::SampleDifferentialPressureAveraging.into();
+            let stop: [u8; 2] = Command::StopContinuousMeasurement.into();
+
+            let expectations = [
+                Transaction::write(0x10, command.into()),
+                Transaction::read(0x10, bytes.clone()),
+                Transaction::write(0x10, stop.into()),
+            ];
+            let mock = I2cMock::new(&expectations);
+            let sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+            let mut sampling = sdp.start_sampling_differential_pressure(true).unwrap();
+            let _result = sampling.read_continuous_sample();
+
+            let sdp = sampling.stop_sampling().unwrap();
+            sdp.destroy().done();
+        }
+    }
 }

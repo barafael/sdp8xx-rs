@@ -20,6 +20,7 @@ branch = "tryfrom_for_i2cbuffer"
 [dev-dependencies]
 linux-embedded-hal = "0.3.0"
 embedded-hal-mock = "0.7.2"
+proptest = "1.0.0"
 
 [profile.release]
 codegen-units = 1 # better optimizations
