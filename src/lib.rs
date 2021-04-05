@@ -349,11 +349,9 @@ where
 {
     /// Read a sample in continuous mode
     pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, SdpError<I2C, I2C>> {
-        let mut buffer = [0u8; 9];
         // TODO rate limiting no faster than 0.5ms
-        self.i2c
-            .read(self.address, &mut buffer)
-            .map_err(SdpError::I2cRead)?;
+        let mut buffer: I2cBuffer<9> = I2cBuffer::new();
+        buffer.read_and_validate(self.address, &mut self.i2c)?;
         Sample::try_from(buffer).map_err(|_| SdpError::SampleError)
     }
 
@@ -379,11 +377,9 @@ where
 {
     /// Read a sample in continuous mode
     pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, SdpError<I2C, I2C>> {
-        let mut buffer = [0u8; 9];
+        let mut buffer: I2cBuffer<9> = I2cBuffer::new();
         // TODO rate limiting no faster than 0.5ms
-        self.i2c
-            .read(self.address, &mut buffer)
-            .map_err(SdpError::I2cRead)?;
+        buffer.read_and_validate(self.address, &mut self.i2c)?;
         Sample::try_from(buffer).map_err(|_| SdpError::SampleError)
     }
 
@@ -518,6 +514,8 @@ mod tests {
         let _data1 = sampling.read_continuous_sample().unwrap();
         let _data2 = sampling.read_continuous_sample().unwrap();
         let _data3 = sampling.read_continuous_sample().unwrap();
+
+        // TODO improve the meaning of this test by checking data
 
         let sdp = sampling.stop_sampling().unwrap();
         sdp.destroy().done();

@@ -56,29 +56,6 @@ impl<T> TryFrom<I2cBuffer<9>> for Sample<T> {
     }
 }
 
-impl<T> TryFrom<[u8; 9]> for Sample<T> {
-    type Error = SampleError;
-
-    fn try_from(buffer: [u8; 9]) -> Result<Self, Self::Error> {
-        let dp_raw: i16 = (buffer[0] as i16) << 8 | buffer[1] as i16;
-        let temp_raw: i16 = (buffer[3] as i16) << 8 | buffer[4] as i16;
-        let dp_scale: i16 = (buffer[6] as i16) << 8 | buffer[7] as i16;
-
-        if dp_scale == 0 {
-            return Err(SampleError::InvalidScaleFactor);
-        }
-
-        let value = dp_raw as f32 / dp_scale as f32;
-        let temperature = temp_raw as f32 / TEMPERATURE_SCALE_FACTOR;
-
-        Ok(Sample::<T> {
-            value,
-            temperature,
-            state: PhantomData::<T>,
-        })
-    }
-}
-
 impl<T> Sample<T> {
     /// Get the temperature
     pub fn get_temperature(&self) -> f32 {
@@ -105,7 +82,6 @@ mod tests {
     use std::{convert::TryFrom, marker::PhantomData};
 
     use sensirion_i2c::{
-        crc8,
         i2c_buffer::{Appendable, I2cBuffer},
     };
 
@@ -134,30 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn try_from_bytes_valid() {
-        let mut data = [1, 2, 0, 30, 5, 0, 7, 8, 0];
-        data[2] = crc8::calculate(&data[0..2]);
-        data[5] = crc8::calculate(&data[3..5]);
-        data[8] = crc8::calculate(&data[6..8]);
-
-        assert!(Sample::<DifferentialPressure>::try_from(data).is_ok());
-        assert!(Sample::<MassFlow>::try_from(data).is_ok());
-    }
-
-    #[test]
-    fn try_from_bytes_invalid() {
-        let mut data = [1, 2, 0, 30, 5, 0, 0, 0, 0];
-        data[2] = crc8::calculate(&data[0..2]);
-        data[5] = crc8::calculate(&data[3..5]);
-        data[8] = crc8::calculate(&data[6..8]);
-
-        let error = Sample::<MassFlow>::try_from(data);
-        assert!(error.is_err());
-        assert_eq!(SampleError::InvalidScaleFactor, error.unwrap_err());
-    }
-
-    #[test]
-    fn try_from_buffer_invalid() {
+    fn try_from_buffer_invalid_scale_factor() {
         let data: [u16; 3] = [12, 305, 0];
         let mut buffer = I2cBuffer::<9>::new();
         buffer.append(&data[..]).unwrap();
