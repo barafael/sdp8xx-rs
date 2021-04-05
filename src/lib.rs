@@ -400,7 +400,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use core::panic;
     use hal::MockError;
+    use sensirion_i2c::i2c_buffer::Appendable;
     use std::io::ErrorKind;
 
     use embedded_hal_mock as hal;
@@ -494,7 +496,6 @@ mod tests {
         sdp.destroy().done();
     }
 
-    /// Test sampling differential pressure
     #[test]
     fn sample_differential_pressure() {
         let bytes: [u8; 2] = Command::SampleDifferentialPressureAveraging.into();
@@ -516,6 +517,36 @@ mod tests {
         let _data3 = sampling.read_continuous_sample().unwrap();
 
         // TODO improve the meaning of this test by checking data
+
+        let sdp = sampling.stop_sampling().unwrap();
+        sdp.destroy().done();
+    }
+
+    #[test]
+    fn sample_differential_pressure_zero() {
+        let mut buffer: I2cBuffer<9> = I2cBuffer::new();
+        buffer.append(0u16).unwrap();
+        buffer.append(0u16).unwrap();
+        buffer.append(0u16).unwrap();
+        buffer.validate().unwrap();
+
+        let bytes: [u8; 2] = Command::SampleDifferentialPressureAveraging.into();
+        let stop: [u8; 2] = Command::StopContinuousMeasurement.into();
+
+        let expectations = [
+            Transaction::write(0x10, bytes.into()),
+            Transaction::read(0x10, buffer.to_vec()),
+            Transaction::write(0x10, stop.into()),
+        ];
+        let mock = I2cMock::new(&expectations);
+        let sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+        let mut sampling = sdp.start_sampling_differential_pressure(true).unwrap();
+        let result = sampling.read_continuous_sample();
+        match result {
+            Ok(_) => panic!("Succeeded with invalid data."),
+            Err(SdpError::SampleError) => {}
+            _ => panic!("Wrong error variant."),
+        }
 
         let sdp = sampling.stop_sampling().unwrap();
         sdp.destroy().done();

@@ -81,9 +81,7 @@ impl Sample<DifferentialPressure> {
 mod tests {
     use std::{convert::TryFrom, marker::PhantomData};
 
-    use sensirion_i2c::{
-        i2c_buffer::{Appendable, I2cBuffer},
-    };
+    use sensirion_i2c::i2c_buffer::{Appendable, I2cBuffer};
 
     use crate::{DifferentialPressure, MassFlow, Sample, SampleError};
 
