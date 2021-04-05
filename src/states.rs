@@ -4,11 +4,11 @@ use core::marker::PhantomData;
 
 /// Default idle state of the SDP8xx
 #[derive(Debug)]
-pub struct IdleState {}
+pub struct IdleState;
 
 /// Triggered state of the SDP8xx
 #[derive(Debug)]
-pub struct TriggeredState {}
+pub struct TriggeredState;
 
 /// Continuous sampling state of the SDP8xx
 #[derive(Debug)]
@@ -18,4 +18,4 @@ pub struct ContinuousSamplingState<MeasurementType> {
 
 /// Sleep state of the SDP8xx
 #[derive(Debug)]
-pub struct SleepState {}
+pub struct SleepState;

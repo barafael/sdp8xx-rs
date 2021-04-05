@@ -146,7 +146,7 @@ pub struct Sdp8xx<I2C, D, State> {
 impl<I2C, D, E> Sdp8xx<I2C, D, IdleState>
 where
     I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
-    D: DelayUs<u16> + DelayMs<u16>,
+    D: DelayUs<u32> + DelayMs<u32>,
 {
     /// Create a new instance of the SDP8xx driver.
     pub fn new(i2c: I2C, address: u8, delay: D) -> Self {
@@ -295,7 +295,7 @@ where
 impl<I2C, D, E> Sdp8xx<I2C, D, SleepState>
 where
     I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
-    D: DelayUs<u16> + DelayMs<u16>,
+    D: DelayUs<u32> + DelayMs<u32>,
 {
     /// Wake the sensor up from the sleep state
     /// This function blocks for at least 2 milliseconds
@@ -345,7 +345,7 @@ where
 impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState<DifferentialPressure>>
 where
     I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
-    D: DelayUs<u16> + DelayMs<u16>,
+    D: DelayUs<u32> + DelayMs<u32>,
 {
     /// Read a sample in continuous mode
     pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, SdpError<I2C, I2C>> {
@@ -375,7 +375,7 @@ where
 impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState<MassFlow>>
 where
     I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
-    D: DelayUs<u16> + DelayMs<u16>,
+    D: DelayUs<u32> + DelayMs<u32>,
 {
     /// Read a sample in continuous mode
     pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, SdpError<I2C, I2C>> {
@@ -427,7 +427,6 @@ mod tests {
             Transaction::write(0x25, bytes_1.into()),
             Transaction::read(0x25, data.clone()),
         ];
-        //println!("{:x}", crc8::calculate(&data[15..17]));
         let mock = I2cMock::new(&expectations);
         let mut sdp = Sdp8xx::new(mock, 0x25, DelayMock);
         let id = sdp.read_product_id().unwrap();
