@@ -13,7 +13,7 @@ jobs:
         with:
             toolchain: nightly
             override: true
-            components: rustfmt, clippy
+            components: clippy
 
       # `cargo check` command here will use installed `nightly`
       # as it is set as an "override" for current directory
@@ -52,6 +52,15 @@ jobs:
       - run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --verbose --no-default-features
       - run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --verbose --all-features
 
+  rustfmt:
+    name: Verify code formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: hecrj/setup-rust-action@v1
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
 
 # deactivated because: cargo-nono currently rejects the code in src/tests as not no_std, even though it should be hidden by the 'test' feature
 #  ensure_no_std:
