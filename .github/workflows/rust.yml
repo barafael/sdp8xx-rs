@@ -1,6 +1,8 @@
 on: [push]
 
-name: build
+env:
+  RUST_LOG: info
+  RUST_BACKTRACE: 1
 
 jobs:
   check:
@@ -91,3 +93,4 @@ jobs:
 #            && tar xfvz cargo-nono-0.1.9-x86_64-unknown-linux-gnu.tar.gz
 #      - name: Run check
 #        run: ./cargo-nono check
+
