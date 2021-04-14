@@ -62,6 +62,19 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
+  codecov-tarpaulin:
+    name: Generate code coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: hecrj/setup-rust-action@v1
+      # Note: If you need to combine the coverage info of multiple
+      # feature sets, you need a `.tarpaulin.toml` config file, see
+      # the link above for those docs.
+      - uses: actions-rs/tarpaulin@v0.1
+        with:
+          args: --all-features
+
 # deactivated because: cargo-nono currently rejects the code in src/tests as not no_std, even though it should be hidden by the 'test' feature
 #  ensure_no_std:
 #    name: Ensure no_std
