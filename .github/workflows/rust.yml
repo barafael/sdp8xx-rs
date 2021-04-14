@@ -4,7 +4,7 @@ name: build
 
 jobs:
   check:
-    name: Rust
+    name: Run checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -24,7 +24,7 @@ jobs:
           command: check
 
   build:
-    name: Test
+    name: Run tests
     runs-on: ubuntu-latest
 
     steps:
@@ -41,14 +41,16 @@ jobs:
   miri-test:
     name: Test with miri
     runs-on: ubuntu-latest
+    env:
+      MIRIFLAGS: Mon
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
         with:
           rust-version: nightly
           components: miri
-      - run: cargo miri test --verbose --no-default-features
-      - run: cargo miri test --verbose --all-features
+      - run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --verbose --no-default-features
+      - run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --verbose --all-features
 
 
 # deactivated because: cargo-nono currently rejects the code in src/tests as not no_std, even though it should be hidden by the 'test' feature
