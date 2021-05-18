@@ -351,7 +351,7 @@ where
     D: DelayUs<u32> + DelayMs<u32>,
 {
     /// Read a sample in continuous mode
-    pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, SdpError<I2C, I2C>> {
+    pub fn read_continuous_sample(&mut self) -> Result<Sample<DifferentialPressure>, SdpError<I2C, I2C>> {
         // TODO rate limiting no faster than 0.5ms
         let mut buffer: I2cBuffer<9> = I2cBuffer::new();
         buffer.read_and_validate(self.address, &mut self.i2c)?;
