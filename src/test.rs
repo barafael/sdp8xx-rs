@@ -30,7 +30,7 @@ fn product_id() {
         id.product_number
     );
     assert_eq!(0x445566778899aabb, id.serial_number);
-    sdp.destroy().done();
+    sdp.release().done();
 }
 
 /// Test triggering a differential pressure sample
@@ -45,7 +45,7 @@ fn trigger_differential_pressure_read() {
     let mock = I2cMock::new(&expectations);
     let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
     let _data = sdp.trigger_differential_pressure_sample().unwrap();
-    sdp.destroy().done();
+    sdp.release().done();
 }
 
 /// Test triggering a mass flow sample
@@ -60,7 +60,7 @@ fn trigger_mass_flow_read() {
     let mock = I2cMock::new(&expectations);
     let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
     let _data = sdp.trigger_mass_flow_sample().unwrap();
-    sdp.destroy().done();
+    sdp.release().done();
 }
 
 /// Test triggering a differential pressure sample with clock stretching
@@ -75,7 +75,7 @@ fn trigger_differential_pressure_read_sync() {
     let mock = I2cMock::new(&expectations);
     let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
     let _data = sdp.trigger_differential_pressure_sample_sync().unwrap();
-    sdp.destroy().done();
+    sdp.release().done();
 }
 
 /// Test triggering a mass flow sample with clock stretching
@@ -90,7 +90,7 @@ fn trigger_mass_flow_read_sync() {
     let mock = I2cMock::new(&expectations);
     let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
     let _data = sdp.trigger_mass_flow_sample_sync().unwrap();
-    sdp.destroy().done();
+    sdp.release().done();
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn sample_differential_pressure() {
     // TODO improve the meaning of this test by checking data
 
     let sdp = sampling.stop_sampling().unwrap();
-    sdp.destroy().done();
+    sdp.release().done();
 }
 
 #[test]
@@ -146,7 +146,7 @@ fn sample_differential_pressure_zero() {
     }
 
     let sdp = sampling.stop_sampling().unwrap();
-    sdp.destroy().done();
+    sdp.release().done();
 }
 
 /// Test sampling mass flow
@@ -171,7 +171,7 @@ fn sample_mass_flow() {
     let _data3 = sampling.read_continuous_sample().unwrap();
 
     let sdp = sampling.stop_sampling().unwrap();
-    sdp.destroy().done();
+    sdp.release().done();
 }
 
 /// Test the sleep function
@@ -188,7 +188,7 @@ fn go_to_sleep() {
     let sdp = Sdp8xx::new(mock, 0x25, DelayMock);
     let sleeping = sdp.go_to_sleep().unwrap();
     let sdp = sleeping.wake_up().unwrap();
-    sdp.destroy().done();
+    sdp.release().done();
 }
 
 /// Test waking up from sleep by polling
@@ -216,7 +216,7 @@ fn wakeup_by_polling() {
     let sdp = Sdp8xx::new(mock, 0x25, DelayMock);
     let sleeping = sdp.go_to_sleep().unwrap();
     let sdp = sleeping.wake_up_poll().unwrap();
-    sdp.destroy().done();
+    sdp.release().done();
 }
 
 use proptest::prelude::*;
@@ -241,6 +241,6 @@ proptest! {
         let _result = sampling.read_continuous_sample();
 
         let sdp = sampling.stop_sampling().unwrap();
-        sdp.destroy().done();
+        sdp.release().done();
     }
 }

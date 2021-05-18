@@ -162,7 +162,7 @@ where
     }
 
     /// Destroy driver instance, return I2C bus instance.
-    pub fn destroy(self) -> I2C {
+    pub fn release(self) -> I2C {
         self.i2c
     }
 
@@ -248,7 +248,7 @@ where
     pub fn start_sampling_differential_pressure(
         mut self,
         averaging: bool,
-    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState<DifferentialPressure>>, SdpError<I2C, I2C>>
+    ) -> ToDifferentialPressureSampling<I2C, D>
     {
         let command = if averaging {
             Command::SampleDifferentialPressureAveraging
@@ -265,10 +265,7 @@ where
     }
 
     /// Start sampling mass flow mode
-    pub fn start_sampling_mass_flow(
-        mut self,
-        averaging: bool,
-    ) -> Result<Sdp8xx<I2C, D, ContinuousSamplingState<MassFlow>>, SdpError<I2C, I2C>> {
+    pub fn start_sampling_mass_flow(mut self, averaging: bool) -> ToMassflowSampling<I2C, D> {
         let command = if averaging {
             Command::SampleMassFlowAveraging
         } else {
@@ -284,7 +281,7 @@ where
     }
 
     /// Enter the SDP8xx sleep state
-    pub fn go_to_sleep(mut self) -> Result<Sdp8xx<I2C, D, SleepState>, SdpError<I2C, I2C>> {
+    pub fn go_to_sleep(mut self) -> ToSleep<I2C, D> {
         self.send_command(Command::EnterSleepMode)?;
         Ok(Sdp8xx {
             i2c: self.i2c,
@@ -302,7 +299,7 @@ where
 {
     /// Wake the sensor up from the sleep state
     /// This function blocks for at least 2 milliseconds
-    pub fn wake_up(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>> {
+    pub fn wake_up(mut self) -> SleepToIdle<I2C, D> {
         // TODO polling with timeout.
         // Send wake up signal (not acked)
         let _ = self.i2c.write(self.address, &[]);
@@ -325,7 +322,7 @@ where
 
     /// Wake the sensor up from the sleep state by polling the I2C bus
     /// This function blocks for at least 2 milliseconds
-    pub fn wake_up_poll(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>> {
+    pub fn wake_up_poll(mut self) -> SleepToIdle<I2C, D> {
         // Send wake up signal (not acked)
         if self.i2c.write(self.address, &[]).is_ok() {
             return Err(SdpError::WakeUpWhileNotSleeping);
@@ -352,14 +349,14 @@ where
 {
     /// Read a sample in continuous mode
     pub fn read_continuous_sample(&mut self) -> Result<Sample<DifferentialPressure>, SdpError<I2C, I2C>> {
-        // TODO rate limiting no faster than 0.5ms
         let mut buffer: I2cBuffer<9> = I2cBuffer::new();
+        // TODO rate limiting no faster than 0.5ms
         buffer.read_and_validate(self.address, &mut self.i2c)?;
         Sample::try_from(buffer).map_err(|_| SdpError::SampleError)
     }
 
     /// Stop sampling continuous mode
-    pub fn stop_sampling(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>> {
+    pub fn stop_sampling(mut self) -> ToIdle<I2C, D> {
         let bytes: [u8; 2] = Command::StopContinuousMeasurement.into();
         self.i2c
             .write(self.address, &bytes)
@@ -387,7 +384,7 @@ where
     }
 
     /// Stop sampling continuous mode
-    pub fn stop_sampling(mut self) -> Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>> {
+    pub fn stop_sampling(mut self) -> ToIdle<I2C, D> {
         let bytes: [u8; 2] = Command::StopContinuousMeasurement.into();
         self.i2c
             .write(self.address, &bytes)
