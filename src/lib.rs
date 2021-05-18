@@ -248,8 +248,7 @@ where
     pub fn start_sampling_differential_pressure(
         mut self,
         averaging: bool,
-    ) -> ToDifferentialPressureSampling<I2C, D>
-    {
+    ) -> ToDifferentialPressureSampling<I2C, D> {
         let command = if averaging {
             Command::SampleDifferentialPressureAveraging
         } else {
@@ -342,41 +341,13 @@ where
     }
 }
 
-impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState<DifferentialPressure>>
+impl<I2C, D, E, T> Sdp8xx<I2C, D, ContinuousSamplingState<T>>
 where
     I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
     D: DelayUs<u32> + DelayMs<u32>,
 {
     /// Read a sample in continuous mode
-    pub fn read_continuous_sample(&mut self) -> Result<Sample<DifferentialPressure>, SdpError<I2C, I2C>> {
-        let mut buffer: I2cBuffer<9> = I2cBuffer::new();
-        // TODO rate limiting no faster than 0.5ms
-        buffer.read_and_validate(self.address, &mut self.i2c)?;
-        Sample::try_from(buffer).map_err(|_| SdpError::SampleError)
-    }
-
-    /// Stop sampling continuous mode
-    pub fn stop_sampling(mut self) -> ToIdle<I2C, D> {
-        let bytes: [u8; 2] = Command::StopContinuousMeasurement.into();
-        self.i2c
-            .write(self.address, &bytes)
-            .map_err(SdpError::I2cWrite)?;
-        Ok(Sdp8xx {
-            i2c: self.i2c,
-            address: self.address,
-            delay: self.delay,
-            state: PhantomData::<IdleState>,
-        })
-    }
-}
-
-impl<I2C, D, E> Sdp8xx<I2C, D, ContinuousSamplingState<MassFlow>>
-where
-    I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
-    D: DelayUs<u32> + DelayMs<u32>,
-{
-    /// Read a sample in continuous mode
-    pub fn read_continuous_sample(&mut self) -> Result<Sample<MassFlow>, SdpError<I2C, I2C>> {
+    pub fn read_continuous_sample(&mut self) -> Result<Sample<T>, SdpError<I2C, I2C>> {
         let mut buffer: I2cBuffer<9> = I2cBuffer::new();
         // TODO rate limiting no faster than 0.5ms
         buffer.read_and_validate(self.address, &mut self.i2c)?;
