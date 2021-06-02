@@ -1,0 +1,9 @@
+[package]
+name = "sdp8xx-example-raspi"
+version = "0.1.0"
+authors = ["Rafael Bachmann <rafael.bachmann.93@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+sdp8xx = { git = "https://github.com/barafael/sdp8xx", branch = "main" }
+linux-embedded-hal = "0.3.0"
