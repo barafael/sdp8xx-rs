@@ -12,14 +12,11 @@ edition = "2018"
 
 [dependencies]
 embedded-hal = "0.2.4"
-
-[dependencies.sensirion-i2c]
-git = "https://github.com/barafael/sensirion-i2c-rs"
-branch = "tryfrom_for_i2cbuffer"
+sensirion-i2c = "0.1.1"
 
 [dev-dependencies]
-linux-embedded-hal = "0.3.0"
 embedded-hal-mock = "0.7.2"
+linux-embedded-hal = "0.3.0"
 proptest = "1.0.0"
 
 [profile.release]
