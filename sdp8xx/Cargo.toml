@@ -16,10 +16,10 @@ sensirion-i2c = "0.1.1"
 
 [dev-dependencies]
 embedded-hal-mock = "0.8.0"
-linux-embedded-hal = "0.3.1"
+linux-embedded-hal = "0.3.1" # used for doc-tests
 proptest = "1.0.0"
 
 [profile.release]
 codegen-units = 1 # better optimizations
-debug = true # symbols are nice and they don't increase the size on Flash
-lto = true # better optimizations
+debug = true      # symbols are nice and they don't increase the size on Flash
+lto = true        # better optimizations
