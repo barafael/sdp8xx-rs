@@ -126,7 +126,7 @@ impl<I2cWrite: i2c::Write, I2cRead: i2c::Read> From<sensirion_i2c::i2c::Error<I2
 }
 
 /// State of the SDP8xx
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Sdp8xx<I2C, D, State> {
     /// The concrete I2C device implementation.
     i2c: I2C,
