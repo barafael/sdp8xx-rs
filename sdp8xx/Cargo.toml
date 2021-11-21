@@ -1,6 +1,6 @@
 [package]
 name = "sdp8xx"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Rafael Bachmann <rafael.bachmann.93@gmail.com>"]
 license = "MIT"
 description = "Platform agnostic Rust driver for the Sensirion SDP8xx differential pressure sensor."
