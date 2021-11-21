@@ -77,7 +77,7 @@ mod test;
 
 use crate::command::Command;
 use crate::hal::blocking::delay::{DelayMs, DelayUs};
-use crate::hal::blocking::i2c::{Read, Write, WriteRead};
+use crate::hal::blocking::i2c::{self, WriteRead};
 pub use crate::product_info::*;
 pub use crate::sample::*;
 use crate::states::*;
@@ -92,7 +92,7 @@ pub mod states;
 
 /// All possible errors in this crate
 #[derive(Debug, PartialEq)]
-pub enum SdpError<I2cWrite: Write, I2cRead: Read> {
+pub enum SdpError<I2cWrite: i2c::Write, I2cRead: i2c::Read> {
     /// I2C write error
     I2cWrite(I2cWrite::Error),
     /// I2C read error
@@ -113,8 +113,8 @@ pub enum SdpError<I2cWrite: Write, I2cRead: Read> {
     BufferTooSmall,
 }
 
-impl<I2cWrite: embedded_hal::blocking::i2c::Write, I2cRead: embedded_hal::blocking::i2c::Read>
-    From<sensirion_i2c::i2c::Error<I2cWrite, I2cRead>> for SdpError<I2cWrite, I2cRead>
+impl<I2cWrite: i2c::Write, I2cRead: i2c::Read> From<sensirion_i2c::i2c::Error<I2cWrite, I2cRead>>
+    for SdpError<I2cWrite, I2cRead>
 {
     fn from(error: sensirion_i2c::i2c::Error<I2cWrite, I2cRead>) -> Self {
         match error {
@@ -140,7 +140,7 @@ pub struct Sdp8xx<I2C, D, State> {
 
 impl<I2C, D, E> Sdp8xx<I2C, D, IdleState>
 where
-    I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
+    I2C: i2c::Read<Error = E> + i2c::Write<Error = E> + WriteRead<Error = E>,
     D: DelayUs<u32> + DelayMs<u32>,
 {
     /// Create a new instance of the SDP8xx driver.
@@ -271,7 +271,7 @@ where
 
 impl<I2C, D, E> Sdp8xx<I2C, D, SleepState>
 where
-    I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
+    I2C: i2c::Read<Error = E> + i2c::Write<Error = E> + WriteRead<Error = E>,
     D: DelayUs<u32> + DelayMs<u32>,
 {
     /// Wake the sensor up from the sleep state
@@ -321,7 +321,7 @@ where
 
 impl<I2C, D, E, T> Sdp8xx<I2C, D, ContinuousSamplingState<T>>
 where
-    I2C: Read<Error = E> + Write<Error = E> + WriteRead<Error = E>,
+    I2C: i2c::Read<Error = E> + i2c::Write<Error = E> + WriteRead<Error = E>,
     D: DelayUs<u32> + DelayMs<u32>,
 {
     /// Read a sample in continuous mode
