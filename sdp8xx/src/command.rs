@@ -1,4 +1,4 @@
-//! I2C commands for SDP8xx differential pressure sensor
+//! I2C commands for `SDP8xx` differential pressure sensor
 
 use core::convert::From;
 

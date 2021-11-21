@@ -1,10 +1,10 @@
-//! A platform agnostic Rust driver for the Sensirion SDP8xx differential pressure sensor, based
+//! A platform agnostic Rust driver for the Sensirion `SDP8xx` differential pressure sensor, based
 //! on the [`embedded-hal`](https://github.com/japaric/embedded-hal) traits.
 //! Heavily inspired by the [`sgp30 driver by Danilo Bergen`](https://github.com/dbrgn/sgp30-rs)
 //!
 //! ## The Device
 //!
-//! The Sensirion SDP8xx is a differential pressure sensor. It has an I2C interface.
+//! The Sensirion `SDP8xx` is a differential pressure sensor. It has an I2C interface.
 //!
 //! - [Datasheet](https://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/8_Differential_Pressure/Datasheets/Sensirion_Differential_Pressure_Sensors_SDP8xx_Digital_Datasheet.pdf)
 //! - [Product Page](https://www.sensirion.com/en/flow-sensors/differential-pressure-sensors/sdp800-proven-and-improved/)
@@ -80,10 +80,13 @@ use crate::hal::blocking::delay::{DelayMs, DelayUs};
 use crate::hal::blocking::i2c::{self, WriteRead};
 pub use crate::product_info::*;
 pub use crate::sample::*;
-use crate::states::*;
 use core::convert::TryFrom;
 use core::marker::PhantomData;
 use embedded_hal as hal;
+use states::{
+    ContinuousSamplingState, IdleState, SleepState, SleepToIdle, ToDifferentialPressureSampling,
+    ToIdle, ToMassflowSampling, ToSleep,
+};
 
 pub mod command;
 pub mod product_info;
@@ -118,14 +121,14 @@ impl<I2cWrite: i2c::Write, I2cRead: i2c::Read> From<sensirion_i2c::i2c::Error<I2
 {
     fn from(error: sensirion_i2c::i2c::Error<I2cWrite, I2cRead>) -> Self {
         match error {
-            sensirion_i2c::i2c::Error::I2cWrite(w) => SdpError::I2cWrite(w),
-            sensirion_i2c::i2c::Error::I2cRead(r) => SdpError::I2cRead(r),
-            sensirion_i2c::i2c::Error::Crc => SdpError::CrcError,
+            sensirion_i2c::i2c::Error::I2cWrite(w) => Self::I2cWrite(w),
+            sensirion_i2c::i2c::Error::I2cRead(r) => Self::I2cRead(r),
+            sensirion_i2c::i2c::Error::Crc => Self::CrcError,
         }
     }
 }
 
-/// State of the SDP8xx
+/// State of the `SDP8xx`
 #[derive(Debug)]
 pub struct Sdp8xx<I2C, D, State> {
     /// The concrete I2C device implementation.
@@ -143,9 +146,9 @@ where
     I2C: i2c::Read<Error = E> + i2c::Write<Error = E> + WriteRead<Error = E>,
     D: DelayUs<u32> + DelayMs<u32>,
 {
-    /// Create a new instance of the SDP8xx driver.
+    /// Create a new instance of the `SDP8xx` driver.
     pub fn new(i2c: I2C, address: u8, delay: D) -> Self {
-        Sdp8xx {
+        Self {
             i2c,
             address,
             delay,
@@ -164,7 +167,7 @@ where
             .map_err(SdpError::I2cWrite)
     }
 
-    /// Return the product id of the SDP8xx
+    /// Return the product id of the `SDP8xx`
     pub fn read_product_id(&mut self) -> Result<ProductIdentifier, SdpError<I2C, I2C>> {
         let mut buf = [0; 18];
         // Request product id
@@ -257,7 +260,7 @@ where
         })
     }
 
-    /// Enter the SDP8xx sleep state
+    /// Enter the `SDP8xx` sleep state
     pub fn go_to_sleep(mut self) -> ToSleep<I2C, D> {
         self.send_command(Command::EnterSleepMode)?;
         Ok(Sdp8xx {

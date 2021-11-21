@@ -1,4 +1,4 @@
-//! Sample type for SDP8xx differential pressure sensor
+//! Sample type for `SDP8xx` differential pressure sensor
 
 use core::convert::TryFrom;
 use core::marker::PhantomData;
@@ -7,7 +7,7 @@ const TEMPERATURE_SCALE_FACTOR: f32 = 200.0f32;
 
 /// Product Identification Error
 #[derive(Debug, PartialEq, Copy, Clone)]
-pub enum SampleError {
+pub enum Error {
     /// Invalid scale factor
     InvalidScaleFactor,
 }
@@ -32,21 +32,21 @@ pub struct Sample<T> {
 }
 
 impl<T> TryFrom<[u8; 9]> for Sample<T> {
-    type Error = SampleError;
+    type Error = Error;
 
     fn try_from(buffer: [u8; 9]) -> Result<Self, Self::Error> {
-        let dp_raw: i16 = (*buffer.get(0).unwrap() as i16) << 8 | *buffer.get(1).unwrap() as i16;
-        let temp_raw: i16 = (*buffer.get(3).unwrap() as i16) << 8 | *buffer.get(4).unwrap() as i16;
-        let dp_scale: i16 = (*buffer.get(6).unwrap() as i16) << 8 | *buffer.get(7).unwrap() as i16;
+        let dp_raw = i16::from(buffer[0]) << 8 | i16::from(buffer[1]);
+        let temp_raw = i16::from(buffer[3]) << 8 | i16::from(buffer[4]);
+        let dp_scale = i16::from(buffer[6]) << 8 | i16::from(buffer[7]);
 
         if dp_scale == 0 {
-            return Err(SampleError::InvalidScaleFactor);
+            return Err(Error::InvalidScaleFactor);
         }
 
-        let value = dp_raw as f32 / dp_scale as f32;
-        let temperature = temp_raw as f32 / TEMPERATURE_SCALE_FACTOR;
+        let value = f32::from(dp_raw) / f32::from(dp_scale);
+        let temperature = f32::from(temp_raw) / TEMPERATURE_SCALE_FACTOR;
 
-        Ok(Sample::<T> {
+        Ok(Self {
             value,
             temperature,
             measurement_type: PhantomData::<T>,
@@ -56,28 +56,31 @@ impl<T> TryFrom<[u8; 9]> for Sample<T> {
 
 impl<T> Sample<T> {
     /// Get the temperature
-    pub fn get_temperature(&self) -> f32 {
+    #[must_use]
+    pub const fn get_temperature(&self) -> f32 {
         self.temperature
     }
 }
 
 impl Sample<MassFlow> {
     /// Get mass flow reading
-    pub fn get_mass_flow(&self) -> f32 {
+    #[must_use]
+    pub const fn get_mass_flow(&self) -> f32 {
         self.value
     }
 }
 
 impl Sample<DifferentialPressure> {
     /// Get differential pressure reading
-    pub fn get_differential_pressure(&self) -> f32 {
+    #[must_use]
+    pub const fn get_differential_pressure(&self) -> f32 {
         self.value
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{DifferentialPressure, MassFlow, Sample, SampleError};
+    use crate::{DifferentialPressure, MassFlow, Sample};
     use std::{convert::TryFrom, marker::PhantomData};
 
     #[test]
@@ -106,6 +109,6 @@ mod tests {
     fn try_from_buffer_invalid_scale_factor() {
         let data: [u8; 9] = [0x0, 0xc, 0x0, 0x01, 0x31, 0x0, 0x0, 0x0, 0x0];
         let error = Sample::<DifferentialPressure>::try_from(data);
-        assert!(matches!(error, Err(SampleError::InvalidScaleFactor)));
+        assert!(matches!(error, Err(super::Error::InvalidScaleFactor)));
     }
 }

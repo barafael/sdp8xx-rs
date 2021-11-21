@@ -1,24 +1,24 @@
-//! State types for the SDP8xx
+//! State types for the `SDP8xx`
 
 use core::marker::PhantomData;
 
 use crate::{DifferentialPressure, MassFlow, Sdp8xx, SdpError};
 
-/// Default idle state of the SDP8xx
+/// Default idle state of the `SDP8xx`
 #[derive(Debug)]
 pub struct IdleState;
 
-/// Triggered state of the SDP8xx
+/// Triggered state of the `SDP8xx`
 #[derive(Debug)]
 pub struct TriggeredState;
 
-/// Continuous sampling state of the SDP8xx
+/// Continuous sampling state of the `SDP8xx`
 #[derive(Debug)]
 pub struct ContinuousSamplingState<MeasurementType> {
     data_type: PhantomData<MeasurementType>,
 }
 
-/// Sleep state of the SDP8xx
+/// Sleep state of the `SDP8xx`
 #[derive(Debug)]
 pub struct SleepState;
 
