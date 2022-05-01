@@ -1,11 +1,11 @@
 [package]
 authors = ["Rafael Bachmann <rafael.bachmann.93@gmail.com>"]
-edition = "2018"
 readme = "README.md"
 name = "sdp8xx-example-stm32f0"
 version = "0.1.0"
 license = "MIT License"
 repository = "https://github.com/barafael/sdp8xx-test-f0"
+edition = "2021"
 
 [dependencies.defmt]
 git = "https://github.com/knurling-rs/defmt"
