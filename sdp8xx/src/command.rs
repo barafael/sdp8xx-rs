@@ -53,19 +53,7 @@ impl From<Command> for [u8; 2] {
 
 impl From<Command> for u16 {
     fn from(val: Command) -> Self {
-        match val {
-            Command::TriggerMassFlowRead => 0x3624,
-            Command::TriggerMassFlowReadSync => 0x3726,
-            Command::TriggerDifferentialPressureRead => 0x362F,
-            Command::TriggerDifferentialPressureReadSync => 0x372D,
-            Command::SampleMassFlowAveraging => 0x3603,
-            Command::SampleMassFlowRaw => 0x3608,
-            Command::SampleDifferentialPressureAveraging => 0x3615,
-            Command::SampleDifferentialPressureRaw => 0x361E,
-            Command::StopContinuousMeasurement => 0x3FF9,
-            Command::EnterSleepMode => 0x3677,
-            Command::ReadProductId0 => 0x367C,
-            Command::ReadProductId1 => 0xE102,
-        }
+        let bytes = <[u8; 2]>::from(val);
+        u16::from_be_bytes(bytes)
     }
 }

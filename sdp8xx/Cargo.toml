@@ -10,14 +10,16 @@ repository = "https://github.com/barafael/sdp8xx-rs"
 categories = ["embedded", "hardware-support", "no-std"]
 edition = "2021"
 
-[dev-dependencies]
-embedded-hal-mock = "0.8.0"
-linux-embedded-hal = "0.3.2" # used for doc-tests
-proptest = "1.0.0"
-
 [dependencies]
-embedded-hal = "0.2.7"
-sensirion-i2c = "0.1.1"
+embedded-hal = "1"
+sensirion-i2c = { git = "https://github.com/Sensirion/sensirion-i2c-rs.git" }
+
+[dev-dependencies]
+embedded-hal-mock = { git = "https://github.com/dbrgn/embedded-hal-mock.git", features = [
+    "eh1",
+] }
+linux-embedded-hal = "0.4.0" # used for doc-tests
+proptest = "1.4.0"
 
 [profile.release]
 codegen-units = 1 # better optimizations

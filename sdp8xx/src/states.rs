@@ -23,18 +23,18 @@ pub struct ContinuousSamplingState<MeasurementType> {
 pub struct SleepState;
 
 /// Transition from Idle to Mass Flow Sampling
-pub type ToMassflowSampling<I2C, D> =
-    Result<Sdp8xx<I2C, D, ContinuousSamplingState<MassFlow>>, SdpError<I2C, I2C>>;
+pub type ToMassflowSampling<I, D> =
+    Result<Sdp8xx<I, D, ContinuousSamplingState<MassFlow>>, SdpError<I>>;
 
 /// Transition from Idle to Differential Pressure Sampling
-pub type ToDifferentialPressureSampling<I2C, D> =
-    Result<Sdp8xx<I2C, D, ContinuousSamplingState<DifferentialPressure>>, SdpError<I2C, I2C>>;
+pub type ToDifferentialPressureSampling<I, D> =
+    Result<Sdp8xx<I, D, ContinuousSamplingState<DifferentialPressure>>, SdpError<I>>;
 
 /// Transition from Continuous Sampling to Idle
-pub type ToIdle<I2C, D> = Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>>;
+pub type ToIdle<I, D> = Result<Sdp8xx<I, D, IdleState>, SdpError<I>>;
 
 /// Transition from Idle to Sleep state
-pub type ToSleep<I2C, D> = Result<Sdp8xx<I2C, D, SleepState>, SdpError<I2C, I2C>>;
+pub type ToSleep<I, D> = Result<Sdp8xx<I, D, SleepState>, SdpError<I>>;
 
 /// Transition from Sleep to Idle state
-pub type SleepToIdle<I2C, D> = Result<Sdp8xx<I2C, D, IdleState>, SdpError<I2C, I2C>>;
+pub type SleepToIdle<I, D> = Result<Sdp8xx<I, D, IdleState>, SdpError<I>>;

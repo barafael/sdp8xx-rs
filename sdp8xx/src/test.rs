@@ -1,9 +1,4 @@
-use super::*;
-use embedded_hal_mock;
-use embedded_hal_mock::delay::MockNoop as DelayMock;
-use embedded_hal_mock::i2c::{Mock as I2cMock, Transaction};
-use embedded_hal_mock::MockError;
-use std::io::ErrorKind;
+use crate::{command::Command, product_info::ProductVariant, Sdp8xx, SdpError};
 
 /// Test the `product_id` function
 #[test]
@@ -19,8 +14,8 @@ fn product_id() {
         Transaction::write(0x25, bytes_1.into()),
         Transaction::read(0x25, data.clone()),
     ];
-    let mock = I2cMock::new(&expectations);
-    let mut sdp = Sdp8xx::new(mock, 0x25, DelayMock);
+    let mock = Mock::new(&expectations);
+    let mut sdp = Sdp8xx::new(mock, 0x25, NoopDelay);
     let id = sdp.read_product_id().unwrap();
     assert_eq!(
         ProductVariant::Sdp800_125Pa { revision: 0x01 },
@@ -39,8 +34,8 @@ fn trigger_differential_pressure_read() {
         Transaction::write(0x10, bytes.into()),
         Transaction::read(0x10, data.clone()),
     ];
-    let mock = I2cMock::new(&expectations);
-    let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+    let mock = Mock::new(&expectations);
+    let mut sdp = Sdp8xx::new(mock, 0x10, NoopDelay);
     let _data = sdp.trigger_differential_pressure_sample().unwrap();
     sdp.release().done();
 }
@@ -54,8 +49,8 @@ fn trigger_mass_flow_read() {
         Transaction::write(0x10, bytes.into()),
         Transaction::read(0x10, data.clone()),
     ];
-    let mock = I2cMock::new(&expectations);
-    let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+    let mock = Mock::new(&expectations);
+    let mut sdp = Sdp8xx::new(mock, 0x10, NoopDelay);
     let _data = sdp.trigger_mass_flow_sample().unwrap();
     sdp.release().done();
 }
@@ -69,8 +64,8 @@ fn trigger_differential_pressure_read_sync() {
         Transaction::write(0x10, bytes.into()),
         Transaction::read(0x10, data.clone()),
     ];
-    let mock = I2cMock::new(&expectations);
-    let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+    let mock = Mock::new(&expectations);
+    let mut sdp = Sdp8xx::new(mock, 0x10, NoopDelay);
     let _data = sdp.trigger_differential_pressure_sample_sync().unwrap();
     sdp.release().done();
 }
@@ -84,8 +79,8 @@ fn trigger_mass_flow_read_sync() {
         Transaction::write(0x10, bytes.into()),
         Transaction::read(0x10, data.clone()),
     ];
-    let mock = I2cMock::new(&expectations);
-    let mut sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+    let mock = Mock::new(&expectations);
+    let mut sdp = Sdp8xx::new(mock, 0x10, NoopDelay);
     let _data = sdp.trigger_mass_flow_sample_sync().unwrap();
     sdp.release().done();
 }
@@ -103,8 +98,8 @@ fn sample_differential_pressure() {
         Transaction::read(0x10, data.clone()),
         Transaction::write(0x10, stop.into()),
     ];
-    let mock = I2cMock::new(&expectations);
-    let sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+    let mock = Mock::new(&expectations);
+    let sdp = Sdp8xx::new(mock, 0x10, NoopDelay);
     let mut sampling = sdp.start_sampling_differential_pressure(true).unwrap();
     let _data1 = sampling.read_continuous_sample().unwrap();
     let _data2 = sampling.read_continuous_sample().unwrap();
@@ -128,8 +123,8 @@ fn sample_differential_pressure_zero() {
         Transaction::read(0x10, buffer.to_vec()),
         Transaction::write(0x10, stop.into()),
     ];
-    let mock = I2cMock::new(&expectations);
-    let sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+    let mock = Mock::new(&expectations);
+    let sdp = Sdp8xx::new(mock, 0x10, NoopDelay);
     let mut sampling = sdp.start_sampling_differential_pressure(true).unwrap();
     let result = sampling.read_continuous_sample();
     assert!(matches!(result, Err(SdpError::SampleError)));
@@ -151,8 +146,8 @@ fn sample_mass_flow() {
         Transaction::read(0x10, data.clone()),
         Transaction::write(0x10, stop.into()),
     ];
-    let mock = I2cMock::new(&expectations);
-    let sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+    let mock = Mock::new(&expectations);
+    let sdp = Sdp8xx::new(mock, 0x10, NoopDelay);
     let mut sampling = sdp.start_sampling_mass_flow(true).unwrap();
     let _data1 = sampling.read_continuous_sample().unwrap();
     let _data2 = sampling.read_continuous_sample().unwrap();
@@ -169,11 +164,11 @@ fn go_to_sleep() {
     let expectations = [
         Transaction::write(0x25, bytes.into()),
         /* dummy */ Transaction::write(0x25, vec![]),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+        Transaction::write(0x25, vec![]).with_error(embedded_hal::i2c::ErrorKind::Other),
         Transaction::write(0x25, vec![]),
     ];
-    let mock = I2cMock::new(&expectations);
-    let sdp = Sdp8xx::new(mock, 0x25, DelayMock);
+    let mock = Mock::new(&expectations);
+    let sdp = Sdp8xx::new(mock, 0x25, NoopDelay);
     let sleeping = sdp.go_to_sleep().unwrap();
     let sdp = sleeping.wake_up().unwrap();
     sdp.release().done();
@@ -185,28 +180,33 @@ fn wakeup_by_polling() {
     let bytes: [u8; 2] = Command::EnterSleepMode.into();
     let expectations = [
         Transaction::write(0x25, bytes.into()),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
-        Transaction::write(0x25, vec![]).with_error(MockError::Io(ErrorKind::Other)),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
+        Transaction::write(0x25, vec![]).with_error(ErrorKind::Other),
         Transaction::write(0x25, vec![]),
     ];
-    let mock = I2cMock::new(&expectations);
-    let sdp = Sdp8xx::new(mock, 0x25, DelayMock);
+    let mock = Mock::new(&expectations);
+    let sdp = Sdp8xx::new(mock, 0x25, NoopDelay);
     let sleeping = sdp.go_to_sleep().unwrap();
     let sdp = sleeping.wake_up_poll().unwrap();
     sdp.release().done();
 }
 
+use embedded_hal::i2c::ErrorKind;
+use embedded_hal_mock::eh1::{
+    delay::NoopDelay,
+    i2c::{Mock, Transaction},
+};
 use proptest::prelude::*;
 
 proptest! {
@@ -223,8 +223,8 @@ proptest! {
             Transaction::read(0x10, bytes.clone()),
             Transaction::write(0x10, stop.into()),
         ];
-        let mock = I2cMock::new(&expectations);
-        let sdp = Sdp8xx::new(mock, 0x10, DelayMock);
+        let mock = Mock::new(&expectations);
+        let sdp = Sdp8xx::new(mock, 0x10, NoopDelay);
         let mut sampling = sdp.start_sampling_differential_pressure(true).unwrap();
         let _result = sampling.read_continuous_sample();
 
