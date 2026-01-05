@@ -1,4 +1,4 @@
-use crate::{command::Command, product_info::ProductVariant, Sdp8xx, SdpError};
+use crate::{Sdp8xx, SdpError, command::Command, product_info::ProductVariant};
 
 /// Test the `product_id` function
 #[test]

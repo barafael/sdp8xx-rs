@@ -1,6 +1,6 @@
 [package]
 name = "sdp8xx"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Rafael Bachmann <rafael.bachmann.93@gmail.com>"]
 license = "MIT"
 description = "Platform agnostic Rust driver for the Sensirion SDP8xx differential pressure sensor."
@@ -8,18 +8,18 @@ readme = "README.md"
 keywords = ["sdp8xx", "sensirion", "driver", "embedded-hal-driver"]
 repository = "https://github.com/barafael/sdp8xx-rs"
 categories = ["embedded", "hardware-support", "no-std"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 embedded-hal = "1"
-sensirion-i2c = { git = "https://github.com/Sensirion/sensirion-i2c-rs.git" }
+sensirion-i2c = "0.4"
 
 [dev-dependencies]
-embedded-hal-mock = { git = "https://github.com/dbrgn/embedded-hal-mock.git", features = [
+embedded-hal-mock = { version = "0.11", features = [
     "eh1",
 ] }
-linux-embedded-hal = "0.4.0" # used for doc-tests
-proptest = "1.4.0"
+linux-embedded-hal = "0.4" # used for doc-tests
+proptest = "1.9"
 
 [profile.release]
 codegen-units = 1 # better optimizations
